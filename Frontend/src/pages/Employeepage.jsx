@@ -1,19 +1,18 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 function EmployeePage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState(null);
   const [msg, setMsg] = useState("");
-  const [isError, setIsError] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // 🔥 Custom Logout Modal
   const [showModal, setShowModal] = useState(false);
-
-  // ⏰ Live Clock
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  const navigate = useNavigate();
+
+  // ⏰ Clock
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -21,133 +20,193 @@ function EmployeePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // 🔥 AUTO LOAD USER AFTER REFRESH
+  // ✅ LOAD SESSION USER
   useEffect(() => {
-    const savedUser = localStorage.getItem("username");
-    if (savedUser) {
-      setUsername(savedUser);
-      fetchTodayStatus(savedUser);
+    const storedUser = sessionStorage.getItem("sessionUser");
+    if (storedUser) {
+      setUsername(storedUser);
+      fetchTodayStatus(storedUser);
     }
   }, []);
 
-  // 🔥 LOGIN
+  // ============================
+  // 🔐 LOGIN
+  // ============================
   const handleLogin = async () => {
     if (!username || !password) {
       setMsg("Enter username & password");
-      setIsError(true);
       return;
     }
 
     setLoading(true);
-    setStatus(null);
     setMsg("");
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/login/", {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const cleanUsername = username.toLowerCase().trim();
+
+      const res = await fetch("http://127.0.0.1:8000/api/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username: cleanUsername,
+          password,
+          timezone,
+        }),
       });
 
       const data = await res.json();
+      console.log("LOGIN RESPONSE:", data);
 
-      if (data.error) {
+      if (data.error && !data.alreadyLoggedIn) {
         setMsg(data.error);
-        setIsError(true);
-      } else {
-        setIsError(false);
-
-        const role = data.role?.toLowerCase();
-
-        if (role === "tl") {
-          localStorage.setItem("role", "tl");
-          window.location.href = "/tl-dashboard";
-        } else {
-          localStorage.setItem("role", "employee");
-          localStorage.setItem("username", username);
-
-          setMsg("Login successful");
-
-          setStatus({
-            user: data.user,
-            login_time: data.login_time,
-            logout_time: null,
-          });
-        }
+        setLoading(false);
+        return;
       }
-    } catch {
+
+      // ✅ TL LOGIN
+      if (data.role === "tl") {
+        sessionStorage.clear();
+        sessionStorage.setItem("role", "tl");
+        navigate("/tl-dashboard");
+        return;
+      }
+
+      // ============================
+      // ✅ EMPLOYEE LOGIN + REDIRECT
+      // ============================
+      sessionStorage.setItem("sessionUser", cleanUsername);
+      sessionStorage.setItem("username", cleanUsername); // ✅ FIX ADDED
+      setUsername(cleanUsername);
+
+      await fetchTodayStatus(cleanUsername);
+
+      setMsg(
+        data.alreadyLoggedIn
+          ? "Already Logged In"
+          : "Login Successful"
+      );
+
+      setTimeout(() => {
+        navigate("/employee-dashboard");
+      }, 400);
+
+    } catch (err) {
+      console.log(err);
       setMsg("Server error");
-      setIsError(true);
     }
 
     setLoading(false);
   };
 
+  // ============================
   // 🔥 LOGOUT CLICK
+  // ============================
   const handleLogoutClick = () => {
-    if (!status || !status.login_time) return;
+    if (!status) {
+      setMsg("No active session");
+      return;
+    }
 
     const loginTime = new Date(status.login_time);
     const now = new Date();
-
     const hoursWorked = (now - loginTime) / (1000 * 60 * 60);
 
     if (hoursWorked < 9) {
-      setShowModal(true); // show custom modal
+      setShowModal(true);
     } else {
       handleLogout();
     }
   };
 
-  // 🔥 CONFIRM LOGOUT
+  // ============================
+  // 🔐 LOGOUT (FIXED)
+  // ============================
   const handleLogout = async () => {
-    const res = await fetch("http://127.0.0.1:8000/api/logout/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ username }),
-    });
+    try {
+      const user = sessionStorage.getItem("sessionUser");
 
-    const data = await res.json();
+      if (!user) {
+        setMsg("No active session found");
+        return;
+      }
 
-    setMsg(data.message || "Logout successful");
-    setIsError(false);
+      const res = await fetch("http://127.0.0.1:8000/api/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: user,
+        }),
+      });
 
-    localStorage.removeItem("username");
-    localStorage.removeItem("role");
+      const data = await res.json();
+      console.log("LOGOUT RESPONSE:", data);
 
-    setStatus({
-      ...status,
-      logout_time: new Date().toISOString(),
-    });
+      if (data.error) {
+        setMsg(data.error);
+        return;
+      }
 
-    setShowModal(false);
+      setMsg("Logout Successful ✅");
+
+      // ✅ CLEAR SESSION
+      sessionStorage.removeItem("sessionUser");
+      sessionStorage.removeItem("username");
+
+      // ✅ RESET STATE
+      setStatus(null);
+      setUsername("");
+      setPassword("");
+      setShowModal(false);
+
+      // ✅ REFRESH STATUS (IMPORTANT FIX)
+      await fetchTodayStatus(user);
+
+      setTimeout(() => {
+        navigate("/");
+      }, 500);
+
+    } catch (err) {
+      console.log(err);
+      setMsg("Logout failed");
+    }
   };
 
+  // ============================
+  // 📊 FETCH STATUS
+  // ============================
   const fetchTodayStatus = async (user) => {
-    const res = await fetch("http://127.0.0.1:8000/api/today/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ username: user }),
-    });
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/today", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username: user }),
+      });
 
-    const data = await res.json();
-    if (!data.message) setStatus(data);
+      const data = await res.json();
+
+      if (!data.message) {
+        setStatus(data);
+      } else {
+        setStatus(null);
+      }
+    } catch (err) {
+      console.log("Error fetching status", err);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-100 py-10">
-
       <div className="max-w-4xl mx-auto px-4">
 
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
-
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-lg">
               {username ? username.charAt(0).toUpperCase() : "E"}
@@ -161,7 +220,6 @@ function EmployeePage() {
             </div>
           </div>
 
-          {/* CLOCK */}
           <div className="text-right">
             <p className="text-sm text-gray-500">
               {currentTime.toLocaleDateString()}
@@ -172,15 +230,11 @@ function EmployeePage() {
           </div>
         </div>
 
-        {/* GRID */}
         <div className="grid md:grid-cols-2 gap-6">
 
-          {/* LOGIN CARD */}
+          {/* LOGIN */}
           <div className="bg-white p-8 rounded-2xl shadow-lg">
-
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              Employee Login
-            </h2>
+            <h2 className="text-2xl font-bold mb-2">Employee Login</h2>
 
             <input
               type="text"
@@ -199,7 +253,6 @@ function EmployeePage() {
 
             <button
               onClick={handleLogin}
-              disabled={loading}
               className="w-full bg-indigo-600 text-white py-2 rounded-lg mb-3"
             >
               {loading ? "Logging in..." : "Login"}
@@ -213,16 +266,12 @@ function EmployeePage() {
             </button>
           </div>
 
-          {/* STATUS CARD */}
+          {/* STATUS */}
           <div className="bg-white p-8 rounded-2xl shadow-lg">
+            <h2 className="text-xl font-bold mb-4">Today’s Status</h2>
 
-            <h2 className="text-xl font-bold mb-4">
-              Today’s Status
-            </h2>
-
-            {/* 🔥 MESSAGE ON TOP */}
             {msg && (
-              <div className="mb-4 text-sm font-medium p-3 rounded-lg bg-green-100 text-green-600">
+              <div className="mb-4 p-3 rounded-lg bg-green-100 text-green-600">
                 {msg}
               </div>
             )}
@@ -233,7 +282,6 @@ function EmployeePage() {
               </p>
             ) : (
               <div className="space-y-3">
-
                 <div className="flex justify-between">
                   <span>User</span>
                   <span>{status.user}</span>
@@ -254,24 +302,19 @@ function EmployeePage() {
                       : "Still Working"}
                   </span>
                 </div>
-
               </div>
             )}
           </div>
 
         </div>
 
-        {/* 🔥 CUSTOM MODAL */}
+        {/* MODAL */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-            <div className="bg-white p-6 rounded-xl shadow-lg w-80">
-
-              <h2 className="text-lg font-bold mb-2">
-                Early Logout
-              </h2>
-
-              <p className="text-sm text-gray-600 mb-4">
-                You haven’t completed 9 hours. Are you sure you want to logout?
+            <div className="bg-white p-6 rounded-xl w-80">
+              <h2 className="text-lg font-bold mb-2">Early Logout</h2>
+              <p className="text-sm mb-4">
+                You haven’t completed 9 hours. Are you sure?
               </p>
 
               <div className="flex justify-end gap-3">
@@ -289,7 +332,6 @@ function EmployeePage() {
                   Logout Anyway
                 </button>
               </div>
-
             </div>
           </div>
         )}
