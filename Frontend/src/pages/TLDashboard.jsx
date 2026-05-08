@@ -6,7 +6,8 @@ import EmployeeManagement from "./EmployeeManagement";
 
 function TLDashboard() {
   const [records, setRecords] = useState([]);
-  const [date, setDate] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [shift, setShift] = useState("");
   const [staffId, setStaffId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -73,50 +74,54 @@ function TLDashboard() {
   // 📊 FILTER FETCH
   // ============================
   const fetchFilteredAttendance = async () => {
-    setLoading(true);
+  setLoading(true);
 
-    let url =
-      `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}&`;
+  let url =
+    `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}&`;
 
-    if (staffId) {
-      url += `staffId=${staffId}&`;
-    }
+  if (staffId) {
+    url += `staffId=${staffId}&`;
+  }
 
-    if (date) {
-      url += `date=${date}&`;
-    }
+  if (fromDate) {
+    url += `fromDate=${fromDate}&`;
+  }
 
-    if (shift) {
-      url += `shift=${shift}&`;
-    }
+  if (toDate) {
+    url += `toDate=${toDate}&`;
+  }
 
-    try {
-      const res = await fetch(url);
+  if (shift) {
+    url += `shift=${shift}&`;
+  }
 
-      const data = await res.json();
+  try {
+    const res = await fetch(url);
 
-      const recordsData = Array.isArray(data)
-        ? data
-        : data?.data || [];
+    const data = await res.json();
 
-      const totalRecords =
-        data?.total || recordsData.length || 0;
+    const recordsData = Array.isArray(data)
+      ? data
+      : data?.data || [];
 
-      const pages = data?.totalPages
-        ? data.totalPages
-        : Math.ceil(totalRecords / limit) || 1;
+    const totalRecords =
+      data?.total || recordsData.length || 0;
 
-      setRecords(recordsData);
-      setTotalPages(pages);
+    const pages = data?.totalPages
+      ? data.totalPages
+      : Math.ceil(totalRecords / limit) || 1;
 
-    } catch (err) {
-      console.log(err);
-      setRecords([]);
-      setTotalPages(1);
-    }
+    setRecords(recordsData);
+    setTotalPages(pages);
 
-    setLoading(false);
-  };
+  } catch (err) {
+    console.log(err);
+    setRecords([]);
+    setTotalPages(1);
+  }
+
+  setLoading(false);
+};
 
   // ============================
   // 🔐 AUTH
@@ -158,7 +163,7 @@ function TLDashboard() {
     return () =>
       clearInterval(intervalRef.current);
 
-  }, [navigate, isFiltered, page]);
+  }, [navigate, isFiltered, page, fromDate, toDate, shift, staffId]);
 
   // ============================
   // 🔐 LOGOUT
@@ -185,7 +190,8 @@ function TLDashboard() {
     setIsFiltered(false);
 
     setStaffId("");
-    setDate("");
+    setFromDate("");
+    setToDate("");
     setShift("");
 
     setPage(1);
@@ -202,8 +208,12 @@ function TLDashboard() {
       url += `staffId=${staffId}&`;
     }
 
-    if (date) {
-      url += `date=${date}&`;
+    if (fromDate) {
+      url += `fromDate=${fromDate}&`;
+    }
+
+    if (toDate) {
+      url += `toDate=${toDate}&`;
     }
 
     if (shift) {
@@ -440,9 +450,18 @@ function TLDashboard() {
 
                 <input
                   type="date"
-                  value={date}
+                  value={fromDate}
                   onChange={(e) =>
-                    setDate(e.target.value)
+                    setFromDate(e.target.value)
+                  }
+                  className="border p-2 rounded"
+                />
+
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) =>
+                    setToDate(e.target.value)
                   }
                   className="border p-2 rounded"
                 />

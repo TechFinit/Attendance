@@ -12,8 +12,31 @@ function EmployeeManagement() {
   const [department, setDepartment] = useState("");
   const [phone, setPhone] = useState("");
 
+  // PROFILE IMAGE
+  const [profileImage, setProfileImage] =
+    useState(null);
+
+  // EDIT STATES
+  const [editingEmployee, setEditingEmployee] =
+    useState(null);
+
+  const [editFirstName, setEditFirstName] =
+    useState("");
+
+  const [editLastName, setEditLastName] =
+    useState("");
+
+  const [editDepartment, setEditDepartment] =
+    useState("");
+
+  const [editPhone, setEditPhone] =
+    useState("");
+
+  const [editProfileImage, setEditProfileImage] =
+    useState(null);
+
   // ============================
-  // 📡 FETCH EMPLOYEES
+  // FETCH EMPLOYEES
   // ============================
   const fetchEmployees = async () => {
     setLoading(true);
@@ -26,6 +49,7 @@ function EmployeeManagement() {
       const data = await res.json();
 
       setEmployees(Array.isArray(data) ? data : []);
+
     } catch (err) {
       console.log(err);
       setEmployees([]);
@@ -39,7 +63,7 @@ function EmployeeManagement() {
   }, []);
 
   // ============================
-  // ➕ ADD EMPLOYEE
+  // ADD EMPLOYEE
   // ============================
   const handleAddEmployee = async () => {
     if (
@@ -53,22 +77,50 @@ function EmployeeManagement() {
     }
 
     try {
+      const formData = new FormData();
+
+      formData.append(
+        "first_name",
+        firstName
+      );
+
+      formData.append(
+        "last_name",
+        lastName
+      );
+
+      formData.append("email", email);
+
+      formData.append(
+        "password",
+        password
+      );
+
+      formData.append(
+        "department",
+        department
+      );
+
+      formData.append("phone", phone);
+
+      formData.append(
+        "role",
+        "employee"
+      );
+
+      // IMAGE
+      if (profileImage) {
+        formData.append(
+          "profile_image",
+          profileImage
+        );
+      }
+
       const res = await fetch(
         "http://127.0.0.1:8000/api/employees",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            first_name: firstName,
-            last_name: lastName,
-            email,
-            password,
-            department,
-            phone,
-            role: "employee",
-          }),
+          body: formData,
         }
       );
 
@@ -88,6 +140,7 @@ function EmployeeManagement() {
       setPassword("");
       setDepartment("");
       setPhone("");
+      setProfileImage(null);
 
       fetchEmployees();
 
@@ -98,7 +151,82 @@ function EmployeeManagement() {
   };
 
   // ============================
-  // ❌ DELETE EMPLOYEE
+  // START EDIT
+  // ============================
+  const handleEditClick = (emp) => {
+    setEditingEmployee(emp.id);
+
+    setEditFirstName(emp.first_name || "");
+    setEditLastName(emp.last_name || "");
+    setEditDepartment(emp.department || "");
+    setEditPhone(emp.phone || "");
+
+    setEditProfileImage(null);
+  };
+
+  // ============================
+  // SAVE EDIT
+  // ============================
+  const handleSaveEdit = async (id) => {
+    try {
+      const formData = new FormData();
+
+      formData.append(
+        "first_name",
+        editFirstName
+      );
+
+      formData.append(
+        "last_name",
+        editLastName
+      );
+
+      formData.append(
+        "department",
+        editDepartment
+      );
+
+      formData.append(
+        "phone",
+        editPhone
+      );
+
+      if (editProfileImage) {
+        formData.append(
+          "profile_image",
+          editProfileImage
+        );
+      }
+
+      const res = await fetch(
+        `http://127.0.0.1:8000/api/employees/${id}`,
+        {
+          method: "PUT",
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      alert("Employee Updated Successfully");
+
+      setEditingEmployee(null);
+
+      fetchEmployees();
+
+    } catch (err) {
+      console.log(err);
+      alert("Update failed");
+    }
+  };
+
+  // ============================
+  // DELETE EMPLOYEE
   // ============================
   const handleDelete = async (id) => {
     const confirmDelete = window.confirm(
@@ -134,6 +262,7 @@ function EmployeeManagement() {
 
       {/* HEADER */}
       <div className="mb-6">
+
         <h1 className="text-2xl font-bold">
           Employee Profile Management
         </h1>
@@ -141,6 +270,7 @@ function EmployeeManagement() {
         <p className="text-gray-500">
           Manage employee profiles and access
         </p>
+
       </div>
 
       {/* ADD EMPLOYEE */}
@@ -156,6 +286,7 @@ function EmployeeManagement() {
             type="text"
             placeholder="First Name"
             value={firstName}
+            autoComplete="off"
             onChange={(e) =>
               setFirstName(e.target.value)
             }
@@ -166,6 +297,7 @@ function EmployeeManagement() {
             type="text"
             placeholder="Last Name"
             value={lastName}
+            autoComplete="off"
             onChange={(e) =>
               setLastName(e.target.value)
             }
@@ -176,6 +308,7 @@ function EmployeeManagement() {
             type="email"
             placeholder="Work Email"
             value={email}
+            autoComplete="off"
             onChange={(e) =>
               setEmail(e.target.value)
             }
@@ -186,6 +319,7 @@ function EmployeeManagement() {
             type="password"
             placeholder="Temporary Password"
             value={password}
+            autoComplete="new-password"
             onChange={(e) =>
               setPassword(e.target.value)
             }
@@ -196,6 +330,7 @@ function EmployeeManagement() {
             type="text"
             placeholder="Department"
             value={department}
+            autoComplete="off"
             onChange={(e) =>
               setDepartment(e.target.value)
             }
@@ -206,8 +341,21 @@ function EmployeeManagement() {
             type="text"
             placeholder="Phone"
             value={phone}
+            autoComplete="off"
             onChange={(e) =>
               setPhone(e.target.value)
+            }
+            className="border p-3 rounded-lg"
+          />
+
+          {/* PROFILE IMAGE */}
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) =>
+              setProfileImage(
+                e.target.files[0]
+              )
             }
             className="border p-3 rounded-lg"
           />
@@ -227,9 +375,11 @@ function EmployeeManagement() {
       <div className="bg-white rounded-2xl shadow overflow-hidden">
 
         <div className="p-4 border-b">
+
           <h2 className="font-bold">
             Employee List
           </h2>
+
         </div>
 
         {loading ? (
@@ -240,7 +390,9 @@ function EmployeeManagement() {
           <table className="w-full text-sm">
 
             <thead className="bg-indigo-600 text-white">
+
               <tr>
+
                 <th className="p-3 text-left">
                   Employee
                 </th>
@@ -264,7 +416,9 @@ function EmployeeManagement() {
                 <th className="p-3">
                   Action
                 </th>
+
               </tr>
+
             </thead>
 
             <tbody>
@@ -280,7 +434,7 @@ function EmployeeManagement() {
 
                     <div className="flex items-center gap-3">
 
-                      {/* DEFAULT AVATAR */}
+                      {/* PROFILE IMAGE */}
                       {emp.profile_image ? (
                         <img
                           src={emp.profile_image}
@@ -296,14 +450,59 @@ function EmployeeManagement() {
                       )}
 
                       <div>
-                        <p className="font-semibold">
-                          {emp.first_name}{" "}
-                          {emp.last_name}
-                        </p>
 
-                        <p className="text-xs text-gray-500">
-                          {emp.role}
-                        </p>
+                        {editingEmployee === emp.id ? (
+                          <div className="space-y-2">
+
+                            <input
+                              type="text"
+                              value={editFirstName}
+                              autoComplete="off"
+                              onChange={(e) =>
+                                setEditFirstName(
+                                  e.target.value
+                                )
+                              }
+                              className="border p-1 rounded w-full"
+                            />
+
+                            <input
+                              type="text"
+                              value={editLastName}
+                              autoComplete="off"
+                              onChange={(e) =>
+                                setEditLastName(
+                                  e.target.value
+                                )
+                              }
+                              className="border p-1 rounded w-full"
+                            />
+
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) =>
+                                setEditProfileImage(
+                                  e.target.files[0]
+                                )
+                              }
+                              className="border p-1 rounded w-full"
+                            />
+
+                          </div>
+                        ) : (
+                          <>
+                            <p className="font-semibold">
+                              {emp.first_name}{" "}
+                              {emp.last_name}
+                            </p>
+
+                            <p className="text-xs text-gray-500">
+                              {emp.role}
+                            </p>
+                          </>
+                        )}
+
                       </div>
 
                     </div>
@@ -315,7 +514,23 @@ function EmployeeManagement() {
                   </td>
 
                   <td className="p-3 text-center">
-                    {emp.department || "-"}
+
+                    {editingEmployee === emp.id ? (
+                      <input
+                        type="text"
+                        value={editDepartment}
+                        autoComplete="off"
+                        onChange={(e) =>
+                          setEditDepartment(
+                            e.target.value
+                          )
+                        }
+                        className="border p-1 rounded w-full"
+                      />
+                    ) : (
+                      emp.department || "-"
+                    )}
+
                   </td>
 
                   <td className="p-3 text-center">
@@ -323,19 +538,72 @@ function EmployeeManagement() {
                   </td>
 
                   <td className="p-3 text-center">
-                    {emp.phone || "-"}
+
+                    {editingEmployee === emp.id ? (
+                      <input
+                        type="text"
+                        value={editPhone}
+                        autoComplete="off"
+                        onChange={(e) =>
+                          setEditPhone(
+                            e.target.value
+                          )
+                        }
+                        className="border p-1 rounded w-full"
+                      />
+                    ) : (
+                      emp.phone || "-"
+                    )}
+
                   </td>
 
                   <td className="p-3 text-center">
 
-                    <button
-                      onClick={() =>
-                        handleDelete(emp.id)
-                      }
-                      className="bg-red-500 text-white px-3 py-1 rounded"
-                    >
-                      Remove
-                    </button>
+                    {editingEmployee === emp.id ? (
+                      <div className="flex gap-2 justify-center">
+
+                        <button
+                          onClick={() =>
+                            handleSaveEdit(emp.id)
+                          }
+                          className="bg-green-600 text-white px-3 py-1 rounded"
+                        >
+                          Save
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            setEditingEmployee(null)
+                          }
+                          className="bg-gray-400 text-white px-3 py-1 rounded"
+                        >
+                          Cancel
+                        </button>
+
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 justify-center">
+
+                        <button
+                          onClick={() =>
+                            handleEditClick(emp)
+                          }
+                          className="bg-blue-500 text-white px-3 py-1 rounded"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            handleDelete(emp.id)
+                          }
+                          className="bg-red-500 text-white px-3 py-1 rounded"
+                        >
+                          Remove
+                        </button>
+
+                      </div>
+                    )}
 
                   </td>
 
