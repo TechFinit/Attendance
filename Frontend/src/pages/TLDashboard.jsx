@@ -1,6 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
+import Sidebar from "./Sidebar";
+import EmployeeManagement from "./EmployeeManagement";
+
 function TLDashboard() {
   const [records, setRecords] = useState([]);
   const [date, setDate] = useState("");
@@ -11,98 +14,130 @@ function TLDashboard() {
   const [isFiltered, setIsFiltered] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
 
+  // NEW
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("dashboard");
+
+  const [tlData, setTlData] = useState({
+    first_name: "",
+    last_name: "",
+    profile_image: "",
+  });
+
   const [page, setPage] = useState(1);
   const limit = 10;
 
   const intervalRef = useRef(null);
+
   const navigate = useNavigate();
 
   // ============================
-  // 📡 FETCH (MAIN)
+  // 📡 FETCH ATTENDANCE
   // ============================
-  const fetchAttendance = async (showLoader = false) => {
-  if (showLoader) setLoading(true);
+  const fetchAttendance = async (
+    showLoader = false
+  ) => {
+    if (showLoader) setLoading(true);
 
-  try {
-    const res = await fetch(
-      `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}`
-    );
-    const data = await res.json();
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}`
+      );
 
-    console.log("MAIN DATA:", data);
+      const data = await res.json();
 
-    // ✅ SAFE DATA HANDLING
-    const recordsData = Array.isArray(data)
-      ? data
-      : data?.data || [];
+      const recordsData = Array.isArray(data)
+        ? data
+        : data?.data || [];
 
-    // ✅ FIX: CALCULATE TOTAL PAGES PROPERLY
-    const totalRecords = data?.total || recordsData.length || 0;
+      const totalRecords =
+        data?.total || recordsData.length || 0;
 
-    const pages = data?.totalPages
-      ? data.totalPages
-      : Math.ceil(totalRecords / limit) || 1;
+      const pages = data?.totalPages
+        ? data.totalPages
+        : Math.ceil(totalRecords / limit) || 1;
 
-    setRecords(recordsData);
-    setTotalPages(pages);
+      setRecords(recordsData);
+      setTotalPages(pages);
 
-  } catch (err) {
-    console.log(err);
-    setRecords([]);
-    setTotalPages(1);
-  }
+    } catch (err) {
+      console.log(err);
+      setRecords([]);
+      setTotalPages(1);
+    }
 
-  if (showLoader) setLoading(false);
-};
+    if (showLoader) setLoading(false);
+  };
+
   // ============================
   // 📊 FILTER FETCH
   // ============================
   const fetchFilteredAttendance = async () => {
-  setLoading(true);
+    setLoading(true);
 
-  let url = `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}&`;
+    let url =
+      `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}&`;
 
-  if (staffId) url += `staffId=${staffId}&`;
-  if (date) url += `date=${date}&`;
-  if (shift) url += `shift=${shift}&`;
+    if (staffId) {
+      url += `staffId=${staffId}&`;
+    }
 
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
+    if (date) {
+      url += `date=${date}&`;
+    }
 
-    console.log("FILTER DATA:", data);
+    if (shift) {
+      url += `shift=${shift}&`;
+    }
 
-    // ✅ SAFE DATA HANDLING
-    const recordsData = Array.isArray(data)
-      ? data
-      : data?.data || [];
+    try {
+      const res = await fetch(url);
 
-    // ✅ FIX: CALCULATE TOTAL PAGES PROPERLY
-    const totalRecords = data?.total || recordsData.length || 0;
+      const data = await res.json();
 
-    const pages = data?.totalPages
-      ? data.totalPages
-      : Math.ceil(totalRecords / limit) || 1;
+      const recordsData = Array.isArray(data)
+        ? data
+        : data?.data || [];
 
-    setRecords(recordsData);
-    setTotalPages(pages);
+      const totalRecords =
+        data?.total || recordsData.length || 0;
 
-  } catch (err) {
-    console.log(err);
-    setRecords([]);
-    setTotalPages(1);
-  }
+      const pages = data?.totalPages
+        ? data.totalPages
+        : Math.ceil(totalRecords / limit) || 1;
 
-  setLoading(false);
-};
+      setRecords(recordsData);
+      setTotalPages(pages);
+
+    } catch (err) {
+      console.log(err);
+      setRecords([]);
+      setTotalPages(1);
+    }
+
+    setLoading(false);
+  };
+
   // ============================
-  // 🔐 AUTH + AUTO REFRESH
+  // 🔐 AUTH
   // ============================
   useEffect(() => {
     const role = sessionStorage.getItem("role");
 
     if (role === "tl") {
       setAuthorized(true);
+
+      // TL PROFILE
+      const tlProfile = {
+        first_name:
+          sessionStorage.getItem("tl_first_name"),
+        last_name:
+          sessionStorage.getItem("tl_last_name"),
+        profile_image:
+          sessionStorage.getItem("tl_profile_image"),
+      };
+
+      setTlData(tlProfile);
 
       if (isFiltered) {
         fetchFilteredAttendance();
@@ -111,23 +146,35 @@ function TLDashboard() {
       }
 
       intervalRef.current = setInterval(() => {
-        if (!isFiltered) fetchAttendance(false);
+        if (!isFiltered) {
+          fetchAttendance(false);
+        }
       }, 30000);
 
     } else {
       navigate("/");
     }
 
-    return () => clearInterval(intervalRef.current);
+    return () =>
+      clearInterval(intervalRef.current);
+
   }, [navigate, isFiltered, page]);
 
+  // ============================
+  // 🔐 LOGOUT
+  // ============================
   const handleLogout = () => {
     sessionStorage.removeItem("role");
+
+    sessionStorage.removeItem("tl_first_name");
+    sessionStorage.removeItem("tl_last_name");
+    sessionStorage.removeItem("tl_profile_image");
+
     navigate("/");
   };
 
   // ============================
-  // 🔍 FILTER ACTIONS
+  // 🔍 FILTER
   // ============================
   const handleApplyFilter = () => {
     setPage(1);
@@ -136,9 +183,11 @@ function TLDashboard() {
 
   const handleResetFilter = () => {
     setIsFiltered(false);
+
     setStaffId("");
     setDate("");
     setShift("");
+
     setPage(1);
   };
 
@@ -146,18 +195,33 @@ function TLDashboard() {
   // 📥 DOWNLOAD
   // ============================
   const handleDownload = async () => {
-    let url = "http://127.0.0.1:8000/api/export?";
+    let url =
+      "http://127.0.0.1:8000/api/export?";
 
-    if (staffId) url += `staffId=${staffId}&`;
-    if (date) url += `date=${date}&`;
-    if (shift) url += `shift=${shift}&`;
+    if (staffId) {
+      url += `staffId=${staffId}&`;
+    }
+
+    if (date) {
+      url += `date=${date}&`;
+    }
+
+    if (shift) {
+      url += `shift=${shift}&`;
+    }
 
     const res = await fetch(url);
+
     const blob = await res.blob();
 
-    const link = document.createElement("a");
-    link.href = window.URL.createObjectURL(blob);
+    const link =
+      document.createElement("a");
+
+    link.href =
+      window.URL.createObjectURL(blob);
+
     link.download = "attendance.xlsx";
+
     link.click();
   };
 
@@ -169,21 +233,36 @@ function TLDashboard() {
   const getLiveHours = (rec) => {
     if (!rec.logout_time) {
       const now = new Date();
-      const login = new Date(rec.login_time);
-      return ((now - login) / (1000 * 60 * 60)).toFixed(2);
+
+      const login = new Date(
+        rec.login_time
+      );
+
+      return (
+        (now - login) /
+        (1000 * 60 * 60)
+      ).toFixed(2);
     }
+
     return rec.total_hours || 0;
   };
 
   const getHoursColor = (hours) => {
-    if (hours > 12) return "text-red-600 font-bold";
-    if (hours > 9) return "text-green-600 font-semibold";
-    if (hours >= 4) return "text-yellow-500 font-semibold";
+    if (hours > 12)
+      return "text-red-600 font-bold";
+
+    if (hours > 9)
+      return "text-green-600 font-semibold";
+
+    if (hours >= 4)
+      return "text-yellow-500 font-semibold";
+
     return "";
   };
 
   const checkLate = (rec) => {
     const login = new Date(rec.login_time);
+
     const h = login.getHours();
     const m = login.getMinutes();
 
@@ -199,10 +278,24 @@ function TLDashboard() {
   };
 
   const checkShiftViolation = (rec) => {
-    const hour = new Date(rec.login_time).getHours();
+    const hour = new Date(
+      rec.login_time
+    ).getHours();
 
-    if (rec.shift === "Day" && (hour < 6 || hour >= 18)) return true;
-    if (rec.shift === "Night" && hour >= 6 && hour < 18) return true;
+    if (
+      rec.shift === "Day" &&
+      (hour < 6 || hour >= 18)
+    ) {
+      return true;
+    }
+
+    if (
+      rec.shift === "Night" &&
+      hour >= 6 &&
+      hour < 18
+    ) {
+      return true;
+    }
 
     return false;
   };
@@ -210,198 +303,383 @@ function TLDashboard() {
   // ============================
   // 📊 STATS
   // ============================
-  const totalEmployees = new Set(records.map(r => r.user)).size;
-  const activeNow = records.filter(r => !r.logout_time).length;
+  const totalEmployees =
+    new Set(records.map((r) => r.user))
+      .size;
+
+  const activeNow = records.filter(
+    (r) => !r.logout_time
+  ).length;
+
   const totalRecords = records.length;
 
   return (
     <div className="min-h-screen bg-gray-100">
 
-      {/* HEADER */}
-      <div className="bg-white shadow p-4 flex justify-between">
-        <h1 className="text-2xl font-bold">TL Dashboard</h1>
+      {/* SIDEBAR */}
+      <Sidebar
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        handleLogout={handleLogout}
+        tlData={tlData}
+      />
 
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 text-white px-4 py-2 rounded"
-        >
-          Logout
-        </button>
-      </div>
+      {/* MAIN */}
+      <div
+        className={`transition-all duration-300 ${
+        sidebarOpen ? "md:ml-64" : "ml-0"
+        }`}
+      >
 
-      <div className="p-6 max-w-7xl mx-auto">
+        {/* HEADER */}
+        <div className="bg-white shadow p-4 flex justify-between items-center">
 
-        {/* STATS */}
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white p-4 rounded shadow">
-            <p>Total Employees</p>
-            <h2 className="text-xl font-bold">{totalEmployees}</h2>
+          <div className="flex items-center gap-3">
+
+            {/* BURGER */}
+            <button
+              onClick={() =>
+                setSidebarOpen(!sidebarOpen)
+              }
+              className="text-2xl"
+            >
+              ☰
+            </button>
+
+            <h1 className="text-2xl font-bold">
+              TL Dashboard
+            </h1>
+
           </div>
 
-          <div className="bg-white p-4 rounded shadow">
-            <p>Active Now</p>
-            <h2 className="text-xl font-bold">{activeNow}</h2>
+          <div className="flex items-center gap-3">
+
+            {/* TL PROFILE */}
+            {tlData?.profile_image ? (
+              <img
+                src={tlData.profile_image}
+                alt="profile"
+                className="w-10 h-10 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold">
+                {tlData?.first_name
+                  ?.charAt(0)
+                  ?.toUpperCase() || "T"}
+              </div>
+            )}
+
+            <div>
+              <p className="font-semibold text-sm">
+                {tlData?.first_name}{" "}
+                {tlData?.last_name}
+              </p>
+
+              <p className="text-xs text-gray-500">
+                Team Leader
+              </p>
+            </div>
+
           </div>
 
-          <div className="bg-white p-4 rounded shadow">
-            <p>Total Records</p>
-            <h2 className="text-xl font-bold">{totalRecords}</h2>
-          </div>
         </div>
 
-        {/* FILTER */}
-        <div className="bg-white p-4 rounded shadow mb-4 flex flex-wrap gap-3 items-center">
+        <div className="p-6 max-w-7xl mx-auto">
 
-          <input
-            type="text"
-            placeholder="Staff ID"
-            value={staffId}
-            onChange={(e) => setStaffId(e.target.value)}
-            className="border p-2 rounded w-40"
-          />
+          {/* EMPLOYEE MANAGEMENT TAB */}
+          {activeTab === "employees" && (
+            <EmployeeManagement />
+          )}
 
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="border p-2 rounded"
-          />
+          {/* DASHBOARD TAB */}
+          {activeTab === "dashboard" && (
+            <>
+              {/* STATS */}
+              <div className="grid md:grid-cols-3 gap-4 mb-6">
 
-          <select
-            value={shift}
-            onChange={(e) => setShift(e.target.value)}
-            className="border p-2 rounded"
-          >
-            <option value="">All Shift</option>
-            <option value="Day">Day</option>
-            <option value="Night">Night</option>
-          </select>
+                <div className="bg-white p-4 rounded shadow">
+                  <p>Total Employees</p>
 
-          <button
-            onClick={handleApplyFilter}
-            className="bg-indigo-600 text-white px-4 py-2 rounded"
-          >
-            Apply
-          </button>
+                  <h2 className="text-xl font-bold">
+                    {totalEmployees}
+                  </h2>
+                </div>
 
-          <button
-            onClick={handleResetFilter}
-            className="bg-gray-300 px-4 py-2 rounded"
-          >
-            Reset
-          </button>
+                <div className="bg-white p-4 rounded shadow">
+                  <p>Active Now</p>
 
-          <button
-            onClick={handleDownload}
-            className="bg-green-600 text-white px-4 py-2 rounded ml-auto"
-          >
-            Download
-          </button>
+                  <h2 className="text-xl font-bold">
+                    {activeNow}
+                  </h2>
+                </div>
+
+                <div className="bg-white p-4 rounded shadow">
+                  <p>Total Records</p>
+
+                  <h2 className="text-xl font-bold">
+                    {totalRecords}
+                  </h2>
+                </div>
+
+              </div>
+
+              {/* FILTER */}
+              <div className="bg-white p-4 rounded shadow mb-4 flex flex-wrap gap-3 items-center">
+
+                <input
+                  type="text"
+                  placeholder="Staff ID"
+                  value={staffId}
+                  onChange={(e) =>
+                    setStaffId(e.target.value)
+                  }
+                  className="border p-2 rounded w-40"
+                />
+
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) =>
+                    setDate(e.target.value)
+                  }
+                  className="border p-2 rounded"
+                />
+
+                <select
+                  value={shift}
+                  onChange={(e) =>
+                    setShift(e.target.value)
+                  }
+                  className="border p-2 rounded"
+                >
+                  <option value="">
+                    All Shift
+                  </option>
+
+                  <option value="Day">
+                    Day
+                  </option>
+
+                  <option value="Night">
+                    Night
+                  </option>
+
+                </select>
+
+                <button
+                  onClick={handleApplyFilter}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded"
+                >
+                  Apply
+                </button>
+
+                <button
+                  onClick={handleResetFilter}
+                  className="bg-gray-300 px-4 py-2 rounded"
+                >
+                  Reset
+                </button>
+
+                <button
+                  onClick={handleDownload}
+                  className="bg-green-600 text-white px-4 py-2 rounded ml-auto"
+                >
+                  Download
+                </button>
+
+              </div>
+
+              {/* TABLE */}
+              <div className="bg-white rounded shadow overflow-hidden">
+
+                <table className="w-full text-sm">
+
+                  <thead className="bg-indigo-600 text-white">
+
+                    <tr>
+                      <th className="p-3">
+                        Staff ID
+                      </th>
+
+                      <th className="p-3 text-left">
+                        Employee
+                      </th>
+
+                      <th className="p-3">
+                        Date
+                      </th>
+
+                      <th className="p-3">
+                        Shift
+                      </th>
+
+                      <th className="p-3">
+                        Login
+                      </th>
+
+                      <th className="p-3">
+                        Logout
+                      </th>
+
+                      <th className="p-3">
+                        Hours
+                      </th>
+
+                      <th className="p-3">
+                        Status
+                      </th>
+                    </tr>
+
+                  </thead>
+
+                  <tbody>
+
+                    {Array.isArray(records) &&
+                      records.map((rec, i) => {
+
+                        const hours =
+                          parseFloat(
+                            getLiveHours(rec)
+                          );
+
+                        const isWorking =
+                          !rec.logout_time;
+
+                        return (
+                          <tr
+                            key={i}
+                            className="border-b"
+                          >
+
+                            <td className="p-3 text-center">
+                              {rec.staff_id || "-"}
+                            </td>
+
+                            <td className="p-3 flex items-center gap-2">
+
+                              {rec.user}
+
+                              {isWorking && (
+                                <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">
+                                  ● Working
+                                </span>
+                              )}
+
+                            </td>
+
+                            <td className="p-3 text-center">
+                              {new Date(
+                                rec.login_time
+                              ).toLocaleDateString()}
+                            </td>
+
+                            <td className="p-3 text-center">
+                              {rec.shift}
+                            </td>
+
+                            <td className="p-3 text-green-600 text-center">
+                              {new Date(
+                                rec.login_time
+                              ).toLocaleTimeString()}
+                            </td>
+
+                            <td className="p-3 text-red-500 text-center">
+                              {rec.logout_time
+                                ? new Date(
+                                    rec.logout_time
+                                  ).toLocaleTimeString()
+                                : "—"}
+                            </td>
+
+                            <td
+                              className={`p-3 text-center ${getHoursColor(
+                                hours
+                              )}`}
+                            >
+                              {hours} hrs
+                            </td>
+
+                            <td className="p-3 text-center">
+
+                              {checkShiftViolation(
+                                rec
+                              ) ? (
+                                <span className="text-red-600 font-bold">
+                                  Invalid
+                                </span>
+                              ) : checkLate(rec) ? (
+                                <span className="text-yellow-600 font-semibold">
+                                  Late
+                                </span>
+                              ) : (
+                                <span className="text-green-600">
+                                  Normal
+                                </span>
+                              )}
+
+                            </td>
+
+                          </tr>
+                        );
+                      })}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+              {/* PAGINATION */}
+              <div className="flex justify-center items-center gap-4 mt-4">
+
+                <button
+                  onClick={() =>
+                    setPage((p) =>
+                      Math.max(p - 1, 1)
+                    )
+                  }
+                  disabled={page === 1}
+                  className={`px-4 py-2 rounded ${
+                    page === 1
+                      ? "bg-gray-200 cursor-not-allowed"
+                      : "bg-gray-300 hover:bg-gray-400"
+                  }`}
+                >
+                  Prev
+                </button>
+
+                <span className="px-4 py-2 font-semibold">
+                  Page {page} of {totalPages}
+                </span>
+
+                <button
+                  onClick={() =>
+                    setPage((p) =>
+                      Math.min(
+                        p + 1,
+                        totalPages
+                      )
+                    )
+                  }
+                  disabled={
+                    page >= totalPages
+                  }
+                  className={`px-4 py-2 rounded ${
+                    page >= totalPages
+                      ? "bg-gray-200 cursor-not-allowed"
+                      : "bg-gray-300 hover:bg-gray-400"
+                  }`}
+                >
+                  Next
+                </button>
+
+              </div>
+            </>
+          )}
+
         </div>
-
-        {/* TABLE */}
-        <div className="bg-white rounded shadow overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-indigo-600 text-white">
-              <tr>
-                <th className="p-3">Staff ID</th>
-                <th className="p-3 text-left">Employee</th>
-                <th className="p-3">Date</th>
-                <th className="p-3">Shift</th>
-                <th className="p-3">Login</th>
-                <th className="p-3">Logout</th>
-                <th className="p-3">Hours</th>
-                <th className="p-3">Status</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {Array.isArray(records) && records.map((rec, i) => {
-                const hours = parseFloat(getLiveHours(rec));
-                const isWorking = !rec.logout_time;
-
-                return (
-                  <tr key={i} className="border-b">
-                    <td className="p-3 text-center">{rec.staff_id || "-"}</td>
-
-                    <td className="p-3 flex items-center gap-2">
-                      {rec.user}
-                      {isWorking && (
-                        <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">
-                          ● Working
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="p-3 text-center">
-                      {new Date(rec.login_time).toLocaleDateString()}
-                    </td>
-
-                    <td className="p-3 text-center">{rec.shift}</td>
-
-                    <td className="p-3 text-green-600 text-center">
-                      {new Date(rec.login_time).toLocaleTimeString()}
-                    </td>
-
-                    <td className="p-3 text-red-500 text-center">
-                      {rec.logout_time
-                        ? new Date(rec.logout_time).toLocaleTimeString()
-                        : "—"}
-                    </td>
-
-                    <td className={`p-3 text-center ${getHoursColor(hours)}`}>
-                      {hours} hrs
-                    </td>
-
-                    <td className="p-3 text-center">
-                      {checkShiftViolation(rec) ? (
-                        <span className="text-red-600 font-bold">Invalid</span>
-                      ) : checkLate(rec) ? (
-                        <span className="text-yellow-600 font-semibold">Late</span>
-                      ) : (
-                        <span className="text-green-600">Normal</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* PAGINATION */}
-<div className="flex justify-center items-center gap-4 mt-4">
-
-  <button
-    onClick={() => setPage((p) => Math.max(p - 1, 1))}
-    disabled={page === 1}
-    className={`px-4 py-2 rounded ${
-      page === 1
-        ? "bg-gray-200 cursor-not-allowed"
-        : "bg-gray-300 hover:bg-gray-400"
-    }`}
-  >
-    Prev
-  </button>
-
-  <span className="px-4 py-2 font-semibold">
-    Page {page} of {totalPages}
-  </span>
-
-  <button
-    onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-    disabled={page >= totalPages}
-    className={`px-4 py-2 rounded ${
-      page >= totalPages
-        ? "bg-gray-200 cursor-not-allowed"
-        : "bg-gray-300 hover:bg-gray-400"
-    }`}
-  >
-    Next
-  </button>
-
-</div>
-
       </div>
     </div>
   );

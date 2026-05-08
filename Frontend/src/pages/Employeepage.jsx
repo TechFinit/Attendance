@@ -68,9 +68,27 @@ function EmployeePage() {
 
       // ✅ TL LOGIN
       if (data.role === "tl") {
-        sessionStorage.clear();
+       sessionStorage.clear();
+
         sessionStorage.setItem("role", "tl");
+
+        sessionStorage.setItem(
+          "tl_first_name",
+          data.first_name || ""
+        );
+
+        sessionStorage.setItem(
+          "tl_last_name",
+          data.last_name || ""
+        );
+
+        sessionStorage.setItem(
+          "tl_profile_image",
+          data.profile_image || ""
+        );
+
         navigate("/tl-dashboard");
+
         return;
       }
 

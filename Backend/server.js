@@ -27,12 +27,18 @@ db.connect((err) => {
 // ============================
 const getShift = (timezone = "Asia/Kolkata") => {
   const now = new Date();
+
   const localTime = new Date(
-    now.toLocaleString("en-US", { timeZone: timezone })
+    now.toLocaleString("en-US", {
+      timeZone: timezone,
+    })
   );
 
   const hour = localTime.getHours();
-  return hour >= 6 && hour < 18 ? "Day" : "Night";
+
+  return hour >= 6 && hour < 18
+    ? "Day"
+    : "Night";
 };
 
 // ============================
@@ -44,46 +50,71 @@ app.post("/api/login", (req, res) => {
   console.log("🔥 LOGIN API HIT:", username);
 
   if (!username || !password) {
-    return res.json({ error: "Missing credentials" });
+    return res.json({
+      error: "Missing credentials",
+    });
   }
 
   username = username.toLowerCase().trim();
 
-  const userQuery = `SELECT * FROM users WHERE LOWER(email) = LOWER(?)`;
+  const userQuery = `
+    SELECT * FROM users
+    WHERE LOWER(email) = LOWER(?)
+    AND is_active = true
+  `;
 
   db.query(userQuery, [username], (err, users) => {
     if (err) return res.json({ error: "DB error" });
 
     if (users.length === 0) {
-      return res.json({ error: "User not found" });
+      return res.json({
+        error: "User not found",
+      });
     }
 
     const user = users[0];
 
     bcrypt.compare(password, user.password, (err, isMatch) => {
-      if (err) return res.json({ error: "Server error" });
-
-      if (!isMatch) {
-        return res.json({ error: "Invalid password" });
+      if (err) {
+        return res.json({
+          error: "Server error",
+        });
       }
 
-      // ✅ TL LOGIN
-      if (user.role === "tl") {
-        return res.json({ role: "tl" });
+      if (!isMatch) {
+        return res.json({
+          error: "Invalid password",
+        });
       }
 
       // ============================
-      // EMPLOYEE LOGIN
+      // ✅ TL LOGIN
+      // ============================
+      if (user.role === "tl") {
+        return res.json({
+          role: "tl",
+          first_name: user.first_name,
+          last_name: user.last_name,
+          profile_image: user.profile_image,
+          email: user.email,
+        });
+      }
+
+      // ============================
+      // ✅ EMPLOYEE LOGIN
       // ============================
       const checkQuery = `
         SELECT * FROM attendance
-        WHERE LOWER(user) = LOWER(?) AND logout_time IS NULL
+        WHERE LOWER(user) = LOWER(?)
+        AND logout_time IS NULL
         ORDER BY login_time DESC
         LIMIT 1
       `;
 
       db.query(checkQuery, [username], (err2, result) => {
-        if (err2) return res.json({ error: "DB error" });
+        if (err2) {
+          return res.json({ error: "DB error" });
+        }
 
         if (result.length > 0) {
           return res.json({
@@ -97,20 +128,32 @@ app.post("/api/login", (req, res) => {
         const loginTime = new Date();
 
         const insertQuery = `
-          INSERT INTO attendance (user, login_time, shift)
+          INSERT INTO attendance (
+            user,
+            login_time,
+            shift
+          )
           VALUES (?, ?, ?)
         `;
 
-        db.query(insertQuery, [username, loginTime, shift], (err3) => {
-          if (err3) return res.json({ error: "Insert failed" });
+        db.query(
+          insertQuery,
+          [username, loginTime, shift],
+          (err3) => {
+            if (err3) {
+              return res.json({
+                error: "Insert failed",
+              });
+            }
 
-          return res.json({
-            role: "employee",
-            alreadyLoggedIn: false,
-            user: username,
-            login_time: loginTime,
-          });
-        });
+            return res.json({
+              role: "employee",
+              alreadyLoggedIn: false,
+              user: username,
+              login_time: loginTime,
+            });
+          }
+        );
       });
     });
   });
@@ -125,14 +168,17 @@ app.post("/api/logout", (req, res) => {
   console.log("🔥 LOGOUT API HIT:", username);
 
   if (!username) {
-    return res.json({ error: "Username missing" });
+    return res.json({
+      error: "Username missing",
+    });
   }
 
   username = username.toLowerCase().trim();
 
   const findQuery = `
     SELECT * FROM attendance
-    WHERE LOWER(user) = LOWER(?) AND logout_time IS NULL
+    WHERE LOWER(user) = LOWER(?)
+    AND logout_time IS NULL
     ORDER BY login_time DESC
     LIMIT 1
   `;
@@ -141,7 +187,9 @@ app.post("/api/logout", (req, res) => {
     if (err) return res.json({ error: "DB error" });
 
     if (results.length === 0) {
-      return res.json({ error: "No active session found" });
+      return res.json({
+        error: "No active session found",
+      });
     }
 
     const record = results[0];
@@ -161,9 +209,15 @@ app.post("/api/logout", (req, res) => {
       updateQuery,
       [logoutTime, hours.toFixed(2), record.id],
       (err2) => {
-        if (err2) return res.json({ error: "Update failed" });
+        if (err2) {
+          return res.json({
+            error: "Update failed",
+          });
+        }
 
-        res.json({ message: "Logout successful" });
+        res.json({
+          message: "Logout successful",
+        });
       }
     );
   });
@@ -188,7 +242,9 @@ app.post("/api/today", (req, res) => {
     if (err) return res.json({ error: "DB error" });
 
     if (results.length === 0) {
-      return res.json({ message: "No record" });
+      return res.json({
+        message: "No record",
+      });
     }
 
     res.json(results[0]);
@@ -196,14 +252,198 @@ app.post("/api/today", (req, res) => {
 });
 
 // ============================
-// 📊 ATTENDANCE (🔥 FINAL FIX)
+// 👥 GET EMPLOYEES
+// ============================
+app.get("/api/employees", (req, res) => {
+  const query = `
+    SELECT
+      id,
+      staff_id,
+      first_name,
+      last_name,
+      email,
+      role,
+      department,
+      phone,
+      profile_image,
+      is_active,
+      created_at
+    FROM users
+    WHERE is_active = true
+    ORDER BY id DESC
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.log(err);
+
+      return res.json({
+        error: "DB error",
+      });
+    }
+
+    res.json(results);
+  });
+});
+
+// ============================
+// ➕ ADD EMPLOYEE
+// ============================
+app.post("/api/employees", async (req, res) => {
+  try {
+    const {
+      first_name,
+      last_name,
+      email,
+      password,
+      role,
+      department,
+      phone,
+    } = req.body;
+
+    if (
+      !first_name ||
+      !last_name ||
+      !email ||
+      !password
+    ) {
+      return res.json({
+        error: "Missing required fields",
+      });
+    }
+
+    const checkQuery = `
+      SELECT * FROM users
+      WHERE LOWER(email)=LOWER(?)
+    `;
+
+    db.query(checkQuery, [email], async (err, existing) => {
+      if (err) {
+        return res.json({
+          error: "DB error",
+        });
+      }
+
+      if (existing.length > 0) {
+        return res.json({
+          error: "Email already exists",
+        });
+      }
+
+      const countQuery = `
+        SELECT COUNT(*) as total
+        FROM users
+      `;
+
+      db.query(countQuery, async (err2, countRes) => {
+        if (err2) {
+          return res.json({
+            error: "DB error",
+          });
+        }
+
+        const count = countRes[0].total + 1;
+
+        const staff_id = `EMP${String(count).padStart(3, "0")}`;
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const insertQuery = `
+          INSERT INTO users (
+            staff_id,
+            first_name,
+            last_name,
+            email,
+            password,
+            role,
+            department,
+            phone
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        db.query(
+          insertQuery,
+          [
+            staff_id,
+            first_name,
+            last_name,
+            email.toLowerCase(),
+            hashedPassword,
+            role || "employee",
+            department || "",
+            phone || "",
+          ],
+          (err3) => {
+            if (err3) {
+              console.log(err3);
+
+              return res.json({
+                error: "Insert failed",
+              });
+            }
+
+            res.json({
+              message:
+                "Employee added successfully",
+            });
+          }
+        );
+      });
+    });
+
+  } catch (err) {
+    console.log(err);
+
+    res.json({
+      error: "Server error",
+    });
+  }
+});
+
+// ============================
+// ❌ SOFT DELETE EMPLOYEE
+// ============================
+app.put("/api/employees/delete/:id", (req, res) => {
+  const { id } = req.params;
+
+  const query = `
+    UPDATE users
+    SET is_active = false
+    WHERE id = ?
+  `;
+
+  db.query(query, [id], (err) => {
+    if (err) {
+      console.log(err);
+
+      return res.json({
+        error: "DB error",
+      });
+    }
+
+    res.json({
+      message: "Employee removed successfully",
+    });
+  });
+});
+
+// ============================
+// 📊 ATTENDANCE
 // ============================
 app.get("/api/attendance", (req, res) => {
-  const { staffId, date, shift, page = 1, limit = 10 } = req.query;
+  const {
+    staffId,
+    date,
+    shift,
+    page = 1,
+    limit = 10,
+  } = req.query;
 
   let baseQuery = `
     FROM attendance a
-    LEFT JOIN users u ON LOWER(a.user) = LOWER(u.email)
+    LEFT JOIN users u
+    ON LOWER(a.user) = LOWER(u.email)
     WHERE 1=1
   `;
 
@@ -233,23 +473,36 @@ app.get("/api/attendance", (req, res) => {
     LIMIT ? OFFSET ?
   `;
 
-  const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
+  const countQuery = `
+    SELECT COUNT(*) as total
+    ${baseQuery}
+  `;
 
   db.query(countQuery, params, (err, countRes) => {
     if (err) return res.json({ error: "DB error" });
 
     const total = countRes[0].total;
+
     const totalPages = Math.ceil(total / limit);
 
     db.query(
       dataQuery,
-      [...params, parseInt(limit), parseInt(offset)],
+      [
+        ...params,
+        parseInt(limit),
+        parseInt(offset),
+      ],
       (err2, results) => {
-        if (err2) return res.json({ error: "DB error" });
+        if (err2) {
+          return res.json({
+            error: "DB error",
+          });
+        }
 
         res.json({
           data: results,
-          totalPages: totalPages,
+          totalPages,
+          total,
         });
       }
     );
@@ -260,18 +513,42 @@ app.get("/api/attendance", (req, res) => {
 // 📥 EXPORT
 // ============================
 app.get("/api/export", (req, res) => {
+  const { staffId, date, shift } = req.query;
+
   let query = `
     SELECT a.*, u.staff_id
     FROM attendance a
-    LEFT JOIN users u ON LOWER(a.user) = LOWER(u.email)
+    LEFT JOIN users u
+    ON LOWER(a.user) = LOWER(u.email)
     WHERE 1=1
   `;
 
-  db.query(query, [], async (err, results) => {
-    if (err) return res.status(500).send("Error");
+  const params = [];
+
+  if (staffId) {
+    query += " AND u.staff_id = ?";
+    params.push(staffId);
+  }
+
+  if (date) {
+    query += " AND DATE(a.login_time) = ?";
+    params.push(date);
+  }
+
+  if (shift && shift !== "All") {
+    query += " AND a.shift = ?";
+    params.push(shift);
+  }
+
+  db.query(query, params, async (err, results) => {
+    if (err) {
+      return res.status(500).send("Error");
+    }
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Attendance");
+
+    const worksheet =
+      workbook.addWorksheet("Attendance");
 
     worksheet.columns = [
       { header: "Staff ID", key: "staff_id" },
@@ -287,11 +564,17 @@ app.get("/api/export", (req, res) => {
       worksheet.addRow({
         staff_id: r.staff_id || "-",
         user: r.user,
-        date: new Date(r.login_time).toLocaleDateString(),
+        date: new Date(
+          r.login_time
+        ).toLocaleDateString(),
         shift: r.shift,
-        login: new Date(r.login_time).toLocaleTimeString(),
+        login: new Date(
+          r.login_time
+        ).toLocaleTimeString(),
         logout: r.logout_time
-          ? new Date(r.logout_time).toLocaleTimeString()
+          ? new Date(
+              r.logout_time
+            ).toLocaleTimeString()
           : "-",
         hours: r.total_hours || 0,
       });
@@ -303,10 +586,13 @@ app.get("/api/export", (req, res) => {
     );
 
     await workbook.xlsx.write(res);
+
     res.end();
   });
 });
 
 app.listen(8000, () => {
-  console.log("🚀 Server running on http://127.0.0.1:8000");
+  console.log(
+    "🚀 Server running on http://127.0.0.1:8000"
+  );
 });
