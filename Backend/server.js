@@ -54,6 +54,206 @@ const upload = multer({
 });
 
 // ============================
+// 🔥 AUTO CLOSE OLD SESSIONS
+// ============================
+const autoCloseSessions = () => {
+
+  const query = `
+    SELECT *
+    FROM attendance
+    WHERE logout_time IS NULL
+  `;
+
+  db.query(query, (err, results) => {
+
+    if (err) {
+      console.log("AUTO CLOSE ERROR:", err);
+      return;
+    }
+
+    const now = new Date();
+
+    results.forEach((record) => {
+
+      const loginTime =
+        new Date(record.login_time);
+
+      let autoLogoutTime =
+        new Date(loginTime);
+
+      // ✅ DAY SHIFT
+      if (record.shift === "Day") {
+
+        autoLogoutTime.setHours(20);
+        autoLogoutTime.setMinutes(0);
+        autoLogoutTime.setSeconds(0);
+
+      }
+
+      // ✅ NIGHT SHIFT
+      else if (record.shift === "Night") {
+
+        autoLogoutTime.setDate(
+          autoLogoutTime.getDate() + 1
+        );
+
+        autoLogoutTime.setHours(4);
+        autoLogoutTime.setMinutes(30);
+        autoLogoutTime.setSeconds(0);
+
+      }
+
+      // ✅ AUTO CLOSE SESSION
+      if (now >= autoLogoutTime) {
+
+        const totalHours =
+          (autoLogoutTime - loginTime) /
+          (1000 * 60 * 60);
+
+        const updateQuery = `
+          UPDATE attendance
+          SET
+            logout_time = ?,
+            total_hours = ?,
+            logout_status = ?
+          WHERE id = ?
+        `;
+
+        db.query(
+          updateQuery,
+          [
+            autoLogoutTime,
+            totalHours.toFixed(2),
+            "Auto Closed",
+            record.id,
+          ],
+          (updateErr) => {
+
+            if (updateErr) {
+
+              console.log(
+                "AUTO UPDATE ERROR:",
+                updateErr
+              );
+
+            } else {
+
+              console.log(
+                `✅ AUTO CLOSED: ${record.user}`
+              );
+
+            }
+          }
+        );
+      }
+    });
+  });
+};
+
+// ✅ RUN AUTO CLOSE EVERY 1 MINUTE
+setInterval(() => {
+  autoCloseSessions();
+}, 60000);
+
+// ============================
+// 🌴 AUTO CREATE OFF RECORDS
+// ============================
+const autoCreateOffRecords = () => {
+
+  const today = new Date()
+    .toISOString()
+    .split("T")[0];
+
+  const leaveQuery = `
+    SELECT *
+    FROM leaves
+    WHERE leave_date = ?
+  `;
+
+  db.query(leaveQuery, [today], (err, leaves) => {
+
+    if (err) {
+      console.log("OFF CHECK ERROR:", err);
+      return;
+    }
+
+    leaves.forEach((leave) => {
+
+      const checkAttendance = `
+        SELECT *
+        FROM attendance
+        WHERE LOWER(user) = LOWER(?)
+        AND DATE(login_time) = ?
+      `;
+
+      db.query(
+        checkAttendance,
+        [leave.user_email, today],
+        (err2, existing) => {
+
+          if (err2) {
+            console.log(err2);
+            return;
+          }
+
+          if (existing.length === 0) {
+
+            const insertOff = `
+              INSERT INTO attendance (
+                user,
+                login_time,
+                logout_time,
+                total_hours,
+                shift,
+                logout_status
+              )
+              VALUES (?, ?, ?, ?, ?, ?)
+            `;
+
+            const offTime =
+              `${today} 00:00:00`;
+
+            db.query(
+              insertOff,
+              [
+                leave.user_email,
+                offTime,
+                offTime,
+                0,
+                "Off",
+                "Off",
+              ],
+              (err3) => {
+
+                if (err3) {
+
+                  console.log(
+                    "OFF INSERT ERROR:",
+                    err3
+                  );
+
+                } else {
+
+                  console.log(
+                    `✅ OFF CREATED: ${leave.user_email}`
+                  );
+
+                }
+              }
+            );
+          }
+        }
+      );
+    });
+  });
+};
+
+// ✅ RUN OFF AUTOMATION EVERY 1 MINUTE
+setInterval(() => {
+  autoCreateOffRecords();
+}, 60000);
+
+// ============================
 // 🌍 SHIFT
 // ============================
 const getShift = (timezone = "Asia/Kolkata") => {
@@ -190,6 +390,7 @@ app.post("/api/login", (req, res) => {
 // 🔐 LOGOUT
 // ============================
 app.post("/api/logout", (req, res) => {
+
   let { username } = req.body;
 
   console.log("🔥 LOGOUT API HIT:", username);
@@ -211,7 +412,12 @@ app.post("/api/logout", (req, res) => {
   `;
 
   db.query(findQuery, [username], (err, results) => {
-    if (err) return res.json({ error: "DB error" });
+
+    if (err) {
+      return res.json({
+        error: "DB error",
+      });
+    }
 
     if (results.length === 0) {
       return res.json({
@@ -220,23 +426,43 @@ app.post("/api/logout", (req, res) => {
     }
 
     const record = results[0];
+
     const logoutTime = new Date();
 
     const hours =
       (logoutTime - new Date(record.login_time)) /
       (1000 * 60 * 60);
 
+    let logoutStatus = "Normal Logout";
+
+    // ✅ EARLY LOGOUT
+    if (hours < 9) {
+      logoutStatus = "Emergency Logout";
+    }
+
     const updateQuery = `
       UPDATE attendance
-      SET logout_time = ?, total_hours = ?
+      SET
+        logout_time = ?,
+        total_hours = ?,
+        logout_status = ?
       WHERE id = ?
     `;
 
     db.query(
       updateQuery,
-      [logoutTime, hours.toFixed(2), record.id],
+      [
+        logoutTime,
+        hours.toFixed(2),
+        logoutStatus,
+        record.id,
+      ],
       (err2) => {
+
         if (err2) {
+
+          console.log(err2);
+
           return res.json({
             error: "Update failed",
           });
@@ -249,7 +475,6 @@ app.post("/api/logout", (req, res) => {
     );
   });
 });
-
 // ============================
 // 📊 TODAY STATUS
 // ============================

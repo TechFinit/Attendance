@@ -622,22 +622,43 @@ function TLDashboard() {
 
                             <td className="p-3 text-center">
 
-                              {checkShiftViolation(
-                                rec
-                              ) ? (
-                                <span className="text-red-600 font-bold">
-                                  Invalid
-                                </span>
-                              ) : checkLate(rec) ? (
-                                <span className="text-yellow-600 font-semibold">
-                                  Late
-                                </span>
-                              ) : (
-                                <span className="text-green-600">
-                                  Normal
-                                </span>
-                              )}
+                              {rec.logout_status === "Auto Closed" ? (
+                                
+                              <span className="text-blue-600 font-semibold">
+                                Auto Closed
+                              </span>
+                                
+                              ) : rec.logout_status === "Emergency Logout" ? (
 
+                                <span className="text-red-500 font-semibold">
+                                  Emergency Logout
+                                </span>
+
+                                ) : checkShiftViolation(rec) ? (
+
+                                  <span className="text-red-600 font-bold">
+                                    Invalid
+                                  </span>
+                                
+                                ) : checkLate(rec) ? (
+
+                                  <span className="text-yellow-600 font-semibold">
+                                    Late
+                                  </span>
+
+                                ) : !rec.logout_time ? (
+
+                                  <span className="text-green-600 font-semibold">
+                                    Working
+                                  </span>
+                                 
+                                ) : (
+
+                                  <span className="text-green-600">
+                                    Normal
+                                  </span> 
+                                
+                                )}
                             </td>
 
                           </tr>
