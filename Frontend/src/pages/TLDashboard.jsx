@@ -271,44 +271,60 @@ function TLDashboard() {
   };
 
   const checkLate = (rec) => {
-    const login = new Date(rec.login_time);
 
-    const h = login.getHours();
-    const m = login.getMinutes();
+  // ✅ If already marked as Late from backend
+  if (rec.logout_status === "Late") {
+    return true;
+  }
 
-    if (rec.shift === "Day") {
-      return h > 10 || (h === 10 && m > 30);
-    }
+  const login = new Date(rec.login_time);
 
-    if (rec.shift === "Night") {
-      return h > 19 || (h === 19 && m > 0);
-    }
+  const h = login.getHours();
+  const m = login.getMinutes();
 
-    return false;
-  };
+  // ✅ MORNING SHIFT
+  if (rec.shift === "Morning Shift") {
+
+    // DST → 10 AM
+    // GMT → 11 AM
+    // Backend already handles exact logic
+
+    return h > 10 || (h === 10 && m > 0);
+  }
+
+  // ✅ NIGHT SHIFT
+  if (rec.shift === "Night Shift") {
+
+    return h > 19 || (h === 19 && m > 0);
+  }
+
+  return false;
+};
 
   const checkShiftViolation = (rec) => {
-    const hour = new Date(
-      rec.login_time
-    ).getHours();
 
-    if (
-      rec.shift === "Day" &&
-      (hour < 6 || hour >= 18)
-    ) {
-      return true;
-    }
+  const hour =
+    new Date(rec.login_time).getHours();
 
-    if (
-      rec.shift === "Night" &&
-      hour >= 6 &&
-      hour < 18
-    ) {
-      return true;
-    }
+  // ✅ MORNING SHIFT
+  if (
+    rec.shift === "Morning Shift" &&
+    (hour < 6 || hour >= 18)
+  ) {
+    return true;
+  }
 
-    return false;
-  };
+  // ✅ NIGHT SHIFT
+  if (
+    rec.shift === "Night Shift" &&
+    hour >= 6 &&
+    hour < 18
+  ) {
+    return true;
+  }
+
+  return false;
+};
 
   // ============================
   // 📊 STATS

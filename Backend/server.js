@@ -81,27 +81,31 @@ const autoCloseSessions = () => {
       let autoLogoutTime =
         new Date(loginTime);
 
-      // ✅ DAY SHIFT
-      if (record.shift === "Day") {
+      // ============================
+      // ✅ DST MODE
+      // Morning: 10 AM - 7 PM
+      // Night: 7 PM - 4 AM
+      // ============================
 
-        autoLogoutTime.setHours(20);
+      if (record.shift === "Morning Shift") {
+
+        autoLogoutTime.setHours(19);
         autoLogoutTime.setMinutes(0);
         autoLogoutTime.setSeconds(0);
 
       }
 
-      // ✅ NIGHT SHIFT
-      else if (record.shift === "Night") {
+      else if (record.shift === "Night Shift") {
 
         autoLogoutTime.setDate(
-          autoLogoutTime.getDate() + 1
-        );
+        autoLogoutTime.getDate() + 1
+      );
 
-        autoLogoutTime.setHours(4);
-        autoLogoutTime.setMinutes(30);
-        autoLogoutTime.setSeconds(0);
+      autoLogoutTime.setHours(4);
+      autoLogoutTime.setMinutes(0);
+      autoLogoutTime.setSeconds(0);
 
-      }
+    }
 
       // ✅ AUTO CLOSE SESSION
       if (now >= autoLogoutTime) {
@@ -254,28 +258,81 @@ setInterval(() => {
 }, 60000);
 
 // ============================
-// 🌍 SHIFT
+// 🌍 UK SHIFT LOGIC (BST / GMT)
 // ============================
-const getShift = (timezone = "Asia/Kolkata") => {
+const getShift = () => {
+
+  // ✅ CURRENT INDIA TIME
   const now = new Date();
 
-  const localTime = new Date(
+  const indiaTime = new Date(
     now.toLocaleString("en-US", {
-      timeZone: timezone,
+      timeZone: "Asia/Kolkata",
     })
   );
 
-  const hour = localTime.getHours();
+  const hour = indiaTime.getHours();
+  const minutes = indiaTime.getMinutes();
 
-  return hour >= 6 && hour < 18
-    ? "Day"
-    : "Night";
+  const currentTime =
+    hour + minutes / 60;
+
+  // ✅ CHECK UK DAYLIGHT SAVING
+  const ukDateString = now.toLocaleString(
+    "en-GB",
+    {
+      timeZone: "Europe/London",
+      timeZoneName: "short",
+    }
+  );
+
+  // BST = Daylight Saving
+  // GMT = Normal UK Time
+  const isBST =
+    ukDateString.includes("BST");
+
+  // ============================
+  // ✅ BST TIMINGS
+  // India:
+  // Morning → 10 AM - 7 PM
+  // Night   → 7 PM - 4 AM
+  // ============================
+  if (isBST) {
+
+    if (
+      currentTime >= 10 &&
+      currentTime < 19
+    ) {
+      return "Morning Shift";
+    }
+
+    return "Night Shift";
+  }
+
+  // ============================
+  // ✅ GMT TIMINGS
+  // India:
+  // Morning → 11 AM - 8 PM
+  // Night   → 8 PM - 5 AM
+  // ============================
+  else {
+
+    if (
+      currentTime >= 11 &&
+      currentTime < 20
+    ) {
+      return "Morning Shift";
+    }
+
+    return "Night Shift";
+  }
 };
 
 // ============================
 // 🔐 LOGIN
 // ============================
 app.post("/api/login", (req, res) => {
+
   let { username, password, timezone } = req.body;
 
   console.log("🔥 LOGIN API HIT:", username);
@@ -295,7 +352,12 @@ app.post("/api/login", (req, res) => {
   `;
 
   db.query(userQuery, [username], (err, users) => {
-    if (err) return res.json({ error: "DB error" });
+
+    if (err) {
+      return res.json({
+        error: "DB error",
+      });
+    }
 
     if (users.length === 0) {
       return res.json({
@@ -305,8 +367,9 @@ app.post("/api/login", (req, res) => {
 
     const user = users[0];
 
-    bcrypt.compare(password, user.password, (err, isMatch) => {
-      if (err) {
+    bcrypt.compare(password, user.password, async (err2, isMatch) => {
+
+      if (err2) {
         return res.json({
           error: "Server error",
         });
@@ -318,8 +381,25 @@ app.post("/api/login", (req, res) => {
         });
       }
 
+      // ============================
+      // ✅ ADMIN LOGIN
+      // ============================
+      if (user.role === "admin") {
+
+        return res.json({
+          role: "admin",
+          first_name: user.first_name,
+          last_name: user.last_name,
+          profile_image: user.profile_image,
+          email: user.email,
+        });
+      }
+
+      // ============================
       // ✅ TL LOGIN
+      // ============================
       if (user.role === "tl") {
+
         return res.json({
           role: "tl",
           first_name: user.first_name,
@@ -329,7 +409,9 @@ app.post("/api/login", (req, res) => {
         });
       }
 
+      // ============================
       // ✅ EMPLOYEE LOGIN
+      // ============================
       const checkQuery = `
         SELECT * FROM attendance
         WHERE LOWER(user) = LOWER(?)
@@ -338,12 +420,16 @@ app.post("/api/login", (req, res) => {
         LIMIT 1
       `;
 
-      db.query(checkQuery, [username], (err2, result) => {
-        if (err2) {
-          return res.json({ error: "DB error" });
+      db.query(checkQuery, [username], (err3, result) => {
+
+        if (err3) {
+          return res.json({
+            error: "DB error",
+          });
         }
 
         if (result.length > 0) {
+
           return res.json({
             role: "employee",
             alreadyLoggedIn: true,
@@ -351,36 +437,174 @@ app.post("/api/login", (req, res) => {
           });
         }
 
-        const shift = getShift(timezone);
-        const loginTime = new Date();
-
-        const insertQuery = `
-          INSERT INTO attendance (
-            user,
-            login_time,
-            shift
-          )
-          VALUES (?, ?, ?)
+        // ============================
+        // ✅ GET CURRENT MODE
+        // ============================
+        const modeQuery = `
+          SELECT *
+          FROM shift_settings
+          WHERE is_active = 1
+          LIMIT 1
         `;
 
-        db.query(
-          insertQuery,
-          [username, loginTime, shift],
-          (err3) => {
-            if (err3) {
-              return res.json({
-                error: "Insert failed",
-              });
-            }
+        db.query(modeQuery, (err4, modeResult) => {
 
+          if (err4) {
             return res.json({
-              role: "employee",
-              alreadyLoggedIn: false,
-              user: username,
-              login_time: loginTime,
+              error: "Shift settings error",
             });
           }
-        );
+
+          let currentMode = "DST";
+
+          if (modeResult.length > 0) {
+            currentMode = modeResult[0].mode;
+          }
+
+          const now = new Date();
+
+          const currentHour =
+            now.getHours();
+
+          let shift = "Morning Shift";
+
+          let loginLimitHour = 10;
+
+          // ============================
+          // ✅ DST MODE
+          // 10 AM - 7 PM
+          // 7 PM - 4 AM
+          // ============================
+          if (currentMode === "DST") {
+
+            if (
+              currentHour >= 19 ||
+              currentHour < 4
+            ) {
+
+              shift = "Night Shift";
+              loginLimitHour = 19;
+
+            } else {
+
+              shift = "Morning Shift";
+              loginLimitHour = 10;
+            }
+          }
+
+          // ============================
+          // ✅ GMT MODE
+          // 11 AM - 8 PM
+          // 8 PM - 5 AM
+          // ============================
+          else {
+
+            if (
+              currentHour >= 20 ||
+              currentHour < 5
+            ) {
+
+              shift = "Night Shift";
+              loginLimitHour = 20;
+
+            } else {
+
+              shift = "Morning Shift";
+              loginLimitHour = 11;
+            }
+          }
+
+          // ============================
+// ✅ STATUS
+// ============================
+let logoutStatus = "Working";
+
+const currentMinutes =
+  now.getMinutes();
+
+const totalCurrentMinutes =
+  (currentHour * 60) + currentMinutes;
+
+let allowedMinutes = 0;
+
+// ✅ DST MODE
+if (currentMode === "DST") {
+
+  if (shift === "Morning Shift") {
+
+    // 10:00 AM
+    allowedMinutes = (10 * 60);
+
+  } else {
+
+    // 7:00 PM
+    allowedMinutes = (19 * 60);
+  }
+
+}
+
+// ✅ GMT MODE
+else {
+
+  if (shift === "Morning Shift") {
+
+    // 11:00 AM
+    allowedMinutes = (11 * 60);
+
+  } else {
+
+    // 8:00 PM
+    allowedMinutes = (20 * 60);
+  }
+}
+
+// ✅ CHECK LATE
+if (totalCurrentMinutes > allowedMinutes) {
+  logoutStatus = "Late";
+}
+
+          const loginTime = new Date();
+
+          const insertQuery = `
+            INSERT INTO attendance (
+              user,
+              login_time,
+              shift,
+              logout_status
+            )
+            VALUES (?, ?, ?, ?)
+          `;
+
+          db.query(
+            insertQuery,
+            [
+              username,
+              loginTime,
+              shift,
+              logoutStatus,
+            ],
+            (err5) => {
+
+              if (err5) {
+
+                console.log(err5);
+
+                return res.json({
+                  error: "Insert failed",
+                });
+              }
+
+              return res.json({
+                role: "employee",
+                alreadyLoggedIn: false,
+                user: username,
+                login_time: loginTime,
+                shift,
+                logoutStatus: logoutStatus,
+              });
+            }
+          );
+        });
       });
     });
   });
@@ -599,7 +823,7 @@ app.post(
 
           const countQuery = `
             SELECT COUNT(*) as total
-            FROM users
+            FROM users WHERE role = 'employee'
           `;
 
           db.query(
