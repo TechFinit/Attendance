@@ -455,7 +455,7 @@ app.post("/api/login", (req, res) => {
             });
           }
 
-          let currentMode = "DST";
+          let currentMode = "Summer Schedule";
 
           if (modeResult.length > 0) {
             currentMode = modeResult[0].mode;
@@ -475,7 +475,7 @@ app.post("/api/login", (req, res) => {
           // 10 AM - 7 PM
           // 7 PM - 4 AM
           // ============================
-          if (currentMode === "DST") {
+          if (currentMode === "Summer Schedule") {
 
             if (
               currentHour >= 19 ||
@@ -528,7 +528,7 @@ const totalCurrentMinutes =
 let allowedMinutes = 0;
 
 // ✅ DST MODE
-if (currentMode === "DST") {
+if (currentMode === "Summer Schedule") {
 
   if (shift === "Morning Shift") {
 

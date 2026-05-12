@@ -74,92 +74,119 @@ function TLDashboard() {
   // 📊 FILTER FETCH
   // ============================
   const fetchFilteredAttendance = async () => {
-  setLoading(true);
+    setLoading(true);
 
-  let url =
-    `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}&`;
+    let url =
+      `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}&`;
 
-  if (staffId) {
-    url += `staffId=${staffId}&`;
-  }
+    if (staffId) {
+      url += `staffId=${staffId}&`;
+    }
 
-  if (fromDate) {
-    url += `fromDate=${fromDate}&`;
-  }
+    if (fromDate) {
+      url += `fromDate=${fromDate}&`;
+    }
 
-  if (toDate) {
-    url += `toDate=${toDate}&`;
-  }
+    if (toDate) {
+      url += `toDate=${toDate}&`;
+    }
 
-  if (shift) {
-    url += `shift=${shift}&`;
-  }
+    if (shift) {
+      url += `shift=${shift}&`;
+    }
 
-  try {
-    const res = await fetch(url);
+    try {
+      const res = await fetch(url);
 
-    const data = await res.json();
+      const data = await res.json();
 
-    const recordsData = Array.isArray(data)
-      ? data
-      : data?.data || [];
+      const recordsData = Array.isArray(data)
+        ? data
+        : data?.data || [];
 
-    const totalRecords =
-      data?.total || recordsData.length || 0;
+      const totalRecords =
+        data?.total || recordsData.length || 0;
 
-    const pages = data?.totalPages
-      ? data.totalPages
-      : Math.ceil(totalRecords / limit) || 1;
+      const pages = data?.totalPages
+        ? data.totalPages
+        : Math.ceil(totalRecords / limit) || 1;
 
-    setRecords(recordsData);
-    setTotalPages(pages);
+      setRecords(recordsData);
+      setTotalPages(pages);
 
-  } catch (err) {
-    console.log(err);
-    setRecords([]);
-    setTotalPages(1);
-  }
+    } catch (err) {
+      console.log(err);
+      setRecords([]);
+      setTotalPages(1);
+    }
 
-  setLoading(false);
-};
+    setLoading(false);
+  };
 
   // ============================
   // 🔐 AUTH
   // ============================
   useEffect(() => {
-    const role = sessionStorage.getItem("role");
 
-    if (role === "tl") {
+    const role =
+      sessionStorage.getItem("role");
+
+    // ✅ ALLOW TL + ADMIN
+    if (role === "tl" || role === "admin") {
       setAuthorized(true);
 
-      // TL PROFILE
+      // ✅ PROFILE DATA
       const tlProfile = {
+
         first_name:
-          sessionStorage.getItem("tl_first_name"),
+          sessionStorage.getItem(
+            "tl_first_name"
+          ),
+
         last_name:
-          sessionStorage.getItem("tl_last_name"),
+          sessionStorage.getItem(
+            "tl_last_name"
+          ),
+
         profile_image:
-          sessionStorage.getItem("tl_profile_image"),
+          sessionStorage.getItem(
+            "tl_profile_image"
+          ),
       };
 
       setTlData(tlProfile);
 
+      // ✅ FETCH DATA
       if (isFiltered) {
+
         fetchFilteredAttendance();
+
       } else {
+
         fetchAttendance(true);
+
       }
 
-      intervalRef.current = setInterval(() => {
-        if (!isFiltered) {
-          fetchAttendance(false);
-        }
-      }, 30000);
+      // ✅ AUTO REFRESH
+      intervalRef.current =
+        setInterval(() => {
 
-    } else {
-      navigate("/");
+          if (!isFiltered) {
+            fetchAttendance(false);
+          }
+
+        }, 30000);
+
     }
 
+    // ❌ UNAUTHORIZED
+    else {
+
+      navigate("/");
+
+    }
+
+    // ✅ CLEANUP
     return () =>
       clearInterval(intervalRef.current);
 
@@ -272,59 +299,59 @@ function TLDashboard() {
 
   const checkLate = (rec) => {
 
-  // ✅ If already marked as Late from backend
-  if (rec.logout_status === "Late") {
-    return true;
-  }
+    // ✅ If already marked as Late from backend
+    if (rec.logout_status === "Late") {
+      return true;
+    }
 
-  const login = new Date(rec.login_time);
+    const login = new Date(rec.login_time);
 
-  const h = login.getHours();
-  const m = login.getMinutes();
+    const h = login.getHours();
+    const m = login.getMinutes();
 
-  // ✅ MORNING SHIFT
-  if (rec.shift === "Morning Shift") {
+    // ✅ MORNING SHIFT
+    if (rec.shift === "Morning Shift") {
 
-    // DST → 10 AM
-    // GMT → 11 AM
-    // Backend already handles exact logic
+      // DST → 10 AM
+      // GMT → 11 AM
+      // Backend already handles exact logic
 
-    return h > 10 || (h === 10 && m > 0);
-  }
+      return h > 10 || (h === 10 && m > 0);
+    }
 
-  // ✅ NIGHT SHIFT
-  if (rec.shift === "Night Shift") {
+    // ✅ NIGHT SHIFT
+    if (rec.shift === "Night Shift") {
 
-    return h > 19 || (h === 19 && m > 0);
-  }
+      return h > 19 || (h === 19 && m > 0);
+    }
 
-  return false;
-};
+    return false;
+  };
 
   const checkShiftViolation = (rec) => {
 
-  const hour =
-    new Date(rec.login_time).getHours();
+    const hour =
+      new Date(rec.login_time).getHours();
 
-  // ✅ MORNING SHIFT
-  if (
-    rec.shift === "Morning Shift" &&
-    (hour < 6 || hour >= 18)
-  ) {
-    return true;
-  }
+    // ✅ MORNING SHIFT
+    if (
+      rec.shift === "Morning Shift" &&
+      (hour < 6 || hour >= 18)
+    ) {
+      return true;
+    }
 
-  // ✅ NIGHT SHIFT
-  if (
-    rec.shift === "Night Shift" &&
-    hour >= 6 &&
-    hour < 18
-  ) {
-    return true;
-  }
+    // ✅ NIGHT SHIFT
+    if (
+      rec.shift === "Night Shift" &&
+      hour >= 6 &&
+      hour < 18
+    ) {
+      return true;
+    }
 
-  return false;
-};
+    return false;
+  };
 
   // ============================
   // 📊 STATS
@@ -354,9 +381,8 @@ function TLDashboard() {
 
       {/* MAIN */}
       <div
-        className={`transition-all duration-300 ${
-        sidebarOpen ? "md:ml-64" : "ml-0"
-        }`}
+        className={`transition-all duration-300 ${sidebarOpen ? "md:ml-64" : "ml-0"
+          }`}
       >
 
         {/* HEADER */}
@@ -623,8 +649,8 @@ function TLDashboard() {
                             <td className="p-3 text-red-500 text-center">
                               {rec.logout_time
                                 ? new Date(
-                                    rec.logout_time
-                                  ).toLocaleTimeString()
+                                  rec.logout_time
+                                ).toLocaleTimeString()
                                 : "—"}
                             </td>
 
@@ -639,42 +665,42 @@ function TLDashboard() {
                             <td className="p-3 text-center">
 
                               {rec.logout_status === "Auto Closed" ? (
-                                
-                              <span className="text-blue-600 font-semibold">
-                                Auto Closed
-                              </span>
-                                
+
+                                <span className="text-blue-600 font-semibold">
+                                  Auto Closed
+                                </span>
+
                               ) : rec.logout_status === "Emergency Logout" ? (
 
                                 <span className="text-red-500 font-semibold">
                                   Emergency Logout
                                 </span>
 
-                                ) : checkShiftViolation(rec) ? (
+                              ) : checkShiftViolation(rec) ? (
 
-                                  <span className="text-red-600 font-bold">
-                                    Invalid
-                                  </span>
-                                
-                                ) : checkLate(rec) ? (
+                                <span className="text-red-600 font-bold">
+                                  Invalid
+                                </span>
 
-                                  <span className="text-yellow-600 font-semibold">
-                                    Late
-                                  </span>
+                              ) : checkLate(rec) ? (
 
-                                ) : !rec.logout_time ? (
+                                <span className="text-yellow-600 font-semibold">
+                                  Late
+                                </span>
 
-                                  <span className="text-green-600 font-semibold">
-                                    Working
-                                  </span>
-                                 
-                                ) : (
+                              ) : !rec.logout_time ? (
 
-                                  <span className="text-green-600">
-                                    Normal
-                                  </span> 
-                                
-                                )}
+                                <span className="text-green-600 font-semibold">
+                                  Working
+                                </span>
+
+                              ) : (
+
+                                <span className="text-green-600">
+                                  Normal
+                                </span>
+
+                              )}
                             </td>
 
                           </tr>
@@ -697,11 +723,10 @@ function TLDashboard() {
                     )
                   }
                   disabled={page === 1}
-                  className={`px-4 py-2 rounded ${
-                    page === 1
+                  className={`px-4 py-2 rounded ${page === 1
                       ? "bg-gray-200 cursor-not-allowed"
                       : "bg-gray-300 hover:bg-gray-400"
-                  }`}
+                    }`}
                 >
                   Prev
                 </button>
@@ -722,11 +747,10 @@ function TLDashboard() {
                   disabled={
                     page >= totalPages
                   }
-                  className={`px-4 py-2 rounded ${
-                    page >= totalPages
+                  className={`px-4 py-2 rounded ${page >= totalPages
                       ? "bg-gray-200 cursor-not-allowed"
                       : "bg-gray-300 hover:bg-gray-400"
-                  }`}
+                    }`}
                 >
                   Next
                 </button>

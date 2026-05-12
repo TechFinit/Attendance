@@ -68,7 +68,7 @@ function EmployeePage() {
 
       // ✅ TL LOGIN
       if (data.role === "tl") {
-       sessionStorage.clear();
+        sessionStorage.clear();
 
         sessionStorage.setItem("role", "tl");
 
@@ -91,6 +91,32 @@ function EmployeePage() {
 
         return;
       }
+
+      // ✅ ADMIN
+      if (data.role === "admin") {
+
+        sessionStorage.setItem("role", "admin");
+
+        sessionStorage.setItem(
+          "admin_first_name",
+          data.first_name
+        );
+
+        sessionStorage.setItem(
+          "admin_last_name",
+          data.last_name
+        );
+
+        sessionStorage.setItem(
+          "admin_profile_image",
+          data.profile_image
+        );
+
+        navigate("/admin-dashboard");
+
+        return;
+      }
+
 
       // ============================
       // ✅ EMPLOYEE LOGIN + REDIRECT
