@@ -36,16 +36,9 @@ const storage = multer.diskStorage({
   },
 
   filename: (req, file, cb) => {
-    const uniqueName =
-      Date.now() +
-      "-" +
-      Math.round(Math.random() * 1e9);
+    const uniqueName = Date.now() + "-" + Math.round(Math.random() * 1e9);
 
-    cb(
-      null,
-      uniqueName +
-        path.extname(file.originalname)
-    );
+    cb(null, uniqueName + path.extname(file.originalname));
   },
 });
 
@@ -57,7 +50,6 @@ const upload = multer({
 // 🔥 AUTO CLOSE OLD SESSIONS
 // ============================
 const autoCloseSessions = () => {
-
   const query = `
     SELECT *
     FROM attendance
@@ -65,7 +57,6 @@ const autoCloseSessions = () => {
   `;
 
   db.query(query, (err, results) => {
-
     if (err) {
       console.log("AUTO CLOSE ERROR:", err);
       return;
@@ -74,12 +65,9 @@ const autoCloseSessions = () => {
     const now = new Date();
 
     results.forEach((record) => {
+      const loginTime = new Date(record.login_time);
 
-      const loginTime =
-        new Date(record.login_time);
-
-      let autoLogoutTime =
-        new Date(loginTime);
+      let autoLogoutTime = new Date(loginTime);
 
       // ============================
       // ✅ DST MODE
@@ -88,31 +76,20 @@ const autoCloseSessions = () => {
       // ============================
 
       if (record.shift === "Morning Shift") {
-
         autoLogoutTime.setHours(19);
         autoLogoutTime.setMinutes(0);
         autoLogoutTime.setSeconds(0);
+      } else if (record.shift === "Night Shift") {
+        autoLogoutTime.setDate(autoLogoutTime.getDate() + 1);
 
+        autoLogoutTime.setHours(4);
+        autoLogoutTime.setMinutes(0);
+        autoLogoutTime.setSeconds(0);
       }
-
-      else if (record.shift === "Night Shift") {
-
-        autoLogoutTime.setDate(
-        autoLogoutTime.getDate() + 1
-      );
-
-      autoLogoutTime.setHours(4);
-      autoLogoutTime.setMinutes(0);
-      autoLogoutTime.setSeconds(0);
-
-    }
 
       // ✅ AUTO CLOSE SESSION
       if (now >= autoLogoutTime) {
-
-        const totalHours =
-          (autoLogoutTime - loginTime) /
-          (1000 * 60 * 60);
+        const totalHours = (autoLogoutTime - loginTime) / (1000 * 60 * 60);
 
         const updateQuery = `
           UPDATE attendance
@@ -125,29 +102,14 @@ const autoCloseSessions = () => {
 
         db.query(
           updateQuery,
-          [
-            autoLogoutTime,
-            totalHours.toFixed(2),
-            "Auto Closed",
-            record.id,
-          ],
+          [autoLogoutTime, totalHours.toFixed(2), "Auto Closed", record.id],
           (updateErr) => {
-
             if (updateErr) {
-
-              console.log(
-                "AUTO UPDATE ERROR:",
-                updateErr
-              );
-
+              console.log("AUTO UPDATE ERROR:", updateErr);
             } else {
-
-              console.log(
-                `✅ AUTO CLOSED: ${record.user}`
-              );
-
+              console.log(`✅ AUTO CLOSED: ${record.user}`);
             }
-          }
+          },
         );
       }
     });
@@ -163,10 +125,7 @@ setInterval(() => {
 // 🌴 AUTO CREATE OFF RECORDS
 // ============================
 const autoCreateOffRecords = () => {
-
-  const today = new Date()
-    .toISOString()
-    .split("T")[0];
+  const today = new Date().toISOString().split("T")[0];
 
   const leaveQuery = `
     SELECT *
@@ -175,14 +134,12 @@ const autoCreateOffRecords = () => {
   `;
 
   db.query(leaveQuery, [today], (err, leaves) => {
-
     if (err) {
       console.log("OFF CHECK ERROR:", err);
       return;
     }
 
     leaves.forEach((leave) => {
-
       const checkAttendance = `
         SELECT *
         FROM attendance
@@ -190,19 +147,14 @@ const autoCreateOffRecords = () => {
         AND DATE(login_time) = ?
       `;
 
-      db.query(
-        checkAttendance,
-        [leave.user_email, today],
-        (err2, existing) => {
+      db.query(checkAttendance, [leave.user_email, today], (err2, existing) => {
+        if (err2) {
+          console.log(err2);
+          return;
+        }
 
-          if (err2) {
-            console.log(err2);
-            return;
-          }
-
-          if (existing.length === 0) {
-
-            const insertOff = `
+        if (existing.length === 0) {
+          const insertOff = `
               INSERT INTO attendance (
                 user,
                 login_time,
@@ -214,40 +166,21 @@ const autoCreateOffRecords = () => {
               VALUES (?, ?, ?, ?, ?, ?)
             `;
 
-            const offTime =
-              `${today} 00:00:00`;
+          const offTime = `${today} 00:00:00`;
 
-            db.query(
-              insertOff,
-              [
-                leave.user_email,
-                offTime,
-                offTime,
-                0,
-                "Off",
-                "Off",
-              ],
-              (err3) => {
-
-                if (err3) {
-
-                  console.log(
-                    "OFF INSERT ERROR:",
-                    err3
-                  );
-
-                } else {
-
-                  console.log(
-                    `✅ OFF CREATED: ${leave.user_email}`
-                  );
-
-                }
+          db.query(
+            insertOff,
+            [leave.user_email, offTime, offTime, 0, "Off", "Off"],
+            (err3) => {
+              if (err3) {
+                console.log("OFF INSERT ERROR:", err3);
+              } else {
+                console.log(`✅ OFF CREATED: ${leave.user_email}`);
               }
-            );
-          }
+            },
+          );
         }
-      );
+      });
     });
   });
 };
@@ -261,35 +194,29 @@ setInterval(() => {
 // 🌍 UK SHIFT LOGIC (BST / GMT)
 // ============================
 const getShift = () => {
-
   // ✅ CURRENT INDIA TIME
   const now = new Date();
 
   const indiaTime = new Date(
     now.toLocaleString("en-US", {
       timeZone: "Asia/Kolkata",
-    })
+    }),
   );
 
   const hour = indiaTime.getHours();
   const minutes = indiaTime.getMinutes();
 
-  const currentTime =
-    hour + minutes / 60;
+  const currentTime = hour + minutes / 60;
 
   // ✅ CHECK UK DAYLIGHT SAVING
-  const ukDateString = now.toLocaleString(
-    "en-GB",
-    {
-      timeZone: "Europe/London",
-      timeZoneName: "short",
-    }
-  );
+  const ukDateString = now.toLocaleString("en-GB", {
+    timeZone: "Europe/London",
+    timeZoneName: "short",
+  });
 
   // BST = Daylight Saving
   // GMT = Normal UK Time
-  const isBST =
-    ukDateString.includes("BST");
+  const isBST = ukDateString.includes("BST");
 
   // ============================
   // ✅ BST TIMINGS
@@ -298,11 +225,7 @@ const getShift = () => {
   // Night   → 7 PM - 4 AM
   // ============================
   if (isBST) {
-
-    if (
-      currentTime >= 10 &&
-      currentTime < 19
-    ) {
+    if (currentTime >= 10 && currentTime < 19) {
       return "Morning Shift";
     }
 
@@ -316,11 +239,7 @@ const getShift = () => {
   // Night   → 8 PM - 5 AM
   // ============================
   else {
-
-    if (
-      currentTime >= 11 &&
-      currentTime < 20
-    ) {
+    if (currentTime >= 11 && currentTime < 20) {
       return "Morning Shift";
     }
 
@@ -332,7 +251,6 @@ const getShift = () => {
 // 🔐 LOGIN
 // ============================
 app.post("/api/login", (req, res) => {
-
   let { username, password, timezone } = req.body;
 
   console.log("🔥 LOGIN API HIT:", username);
@@ -352,7 +270,6 @@ app.post("/api/login", (req, res) => {
   `;
 
   db.query(userQuery, [username], (err, users) => {
-
     if (err) {
       return res.json({
         error: "DB error",
@@ -368,7 +285,6 @@ app.post("/api/login", (req, res) => {
     const user = users[0];
 
     bcrypt.compare(password, user.password, async (err2, isMatch) => {
-
       if (err2) {
         return res.json({
           error: "Server error",
@@ -385,7 +301,6 @@ app.post("/api/login", (req, res) => {
       // ✅ ADMIN LOGIN
       // ============================
       if (user.role === "admin") {
-
         return res.json({
           role: "admin",
           first_name: user.first_name,
@@ -399,7 +314,6 @@ app.post("/api/login", (req, res) => {
       // ✅ TL LOGIN
       // ============================
       if (user.role === "tl") {
-
         return res.json({
           role: "tl",
           first_name: user.first_name,
@@ -421,7 +335,6 @@ app.post("/api/login", (req, res) => {
       `;
 
       db.query(checkQuery, [username], (err3, result) => {
-
         if (err3) {
           return res.json({
             error: "DB error",
@@ -429,7 +342,6 @@ app.post("/api/login", (req, res) => {
         }
 
         if (result.length > 0) {
-
           return res.json({
             role: "employee",
             alreadyLoggedIn: true,
@@ -448,7 +360,6 @@ app.post("/api/login", (req, res) => {
         `;
 
         db.query(modeQuery, (err4, modeResult) => {
-
           if (err4) {
             return res.json({
               error: "Shift settings error",
@@ -463,8 +374,7 @@ app.post("/api/login", (req, res) => {
 
           const now = new Date();
 
-          const currentHour =
-            now.getHours();
+          const currentHour = now.getHours();
 
           let shift = "Morning Shift";
 
@@ -476,17 +386,10 @@ app.post("/api/login", (req, res) => {
           // 7 PM - 4 AM
           // ============================
           if (currentMode === "Summer Schedule") {
-
-            if (
-              currentHour >= 19 ||
-              currentHour < 4
-            ) {
-
+            if (currentHour >= 19 || currentHour < 4) {
               shift = "Night Shift";
               loginLimitHour = 19;
-
             } else {
-
               shift = "Morning Shift";
               loginLimitHour = 10;
             }
@@ -498,70 +401,52 @@ app.post("/api/login", (req, res) => {
           // 8 PM - 5 AM
           // ============================
           else {
-
-            if (
-              currentHour >= 20 ||
-              currentHour < 5
-            ) {
-
+            if (currentHour >= 20 || currentHour < 5) {
               shift = "Night Shift";
               loginLimitHour = 20;
-
             } else {
-
               shift = "Morning Shift";
               loginLimitHour = 11;
             }
           }
 
           // ============================
-// ✅ STATUS
-// ============================
-let logoutStatus = "Working";
+          // ✅ STATUS
+          // ============================
+          let logoutStatus = "Working";
 
-const currentMinutes =
-  now.getMinutes();
+          const currentMinutes = now.getMinutes();
 
-const totalCurrentMinutes =
-  (currentHour * 60) + currentMinutes;
+          const totalCurrentMinutes = currentHour * 60 + currentMinutes;
 
-let allowedMinutes = 0;
+          let allowedMinutes = 0;
 
-// ✅ DST MODE
-if (currentMode === "Summer Schedule") {
+          // ✅ DST MODE
+          if (currentMode === "Summer Schedule") {
+            if (shift === "Morning Shift") {
+              // 10:00 AM
+              allowedMinutes = 10 * 60;
+            } else {
+              // 7:00 PM
+              allowedMinutes = 19 * 60;
+            }
+          }
 
-  if (shift === "Morning Shift") {
+          // ✅ GMT MODE
+          else {
+            if (shift === "Morning Shift") {
+              // 11:00 AM
+              allowedMinutes = 11 * 60;
+            } else {
+              // 8:00 PM
+              allowedMinutes = 20 * 60;
+            }
+          }
 
-    // 10:00 AM
-    allowedMinutes = (10 * 60);
-
-  } else {
-
-    // 7:00 PM
-    allowedMinutes = (19 * 60);
-  }
-
-}
-
-// ✅ GMT MODE
-else {
-
-  if (shift === "Morning Shift") {
-
-    // 11:00 AM
-    allowedMinutes = (11 * 60);
-
-  } else {
-
-    // 8:00 PM
-    allowedMinutes = (20 * 60);
-  }
-}
-
-// ✅ CHECK LATE
-if (totalCurrentMinutes > allowedMinutes) {
-  logoutStatus = "Late";
-}
+          // ✅ CHECK LATE
+          if (totalCurrentMinutes > allowedMinutes) {
+            logoutStatus = "Late";
+          }
 
           const loginTime = new Date();
 
@@ -577,16 +462,9 @@ if (totalCurrentMinutes > allowedMinutes) {
 
           db.query(
             insertQuery,
-            [
-              username,
-              loginTime,
-              shift,
-              logoutStatus,
-            ],
+            [username, loginTime, shift, logoutStatus],
             (err5) => {
-
               if (err5) {
-
                 console.log(err5);
 
                 return res.json({
@@ -602,7 +480,7 @@ if (totalCurrentMinutes > allowedMinutes) {
                 shift,
                 logoutStatus: logoutStatus,
               });
-            }
+            },
           );
         });
       });
@@ -614,7 +492,6 @@ if (totalCurrentMinutes > allowedMinutes) {
 // 🔐 LOGOUT
 // ============================
 app.post("/api/logout", (req, res) => {
-
   let { username } = req.body;
 
   console.log("🔥 LOGOUT API HIT:", username);
@@ -636,7 +513,6 @@ app.post("/api/logout", (req, res) => {
   `;
 
   db.query(findQuery, [username], (err, results) => {
-
     if (err) {
       return res.json({
         error: "DB error",
@@ -653,9 +529,7 @@ app.post("/api/logout", (req, res) => {
 
     const logoutTime = new Date();
 
-    const hours =
-      (logoutTime - new Date(record.login_time)) /
-      (1000 * 60 * 60);
+    const hours = (logoutTime - new Date(record.login_time)) / (1000 * 60 * 60);
 
     let logoutStatus = "Normal Logout";
 
@@ -675,16 +549,9 @@ app.post("/api/logout", (req, res) => {
 
     db.query(
       updateQuery,
-      [
-        logoutTime,
-        hours.toFixed(2),
-        logoutStatus,
-        record.id,
-      ],
+      [logoutTime, hours.toFixed(2), logoutStatus, record.id],
       (err2) => {
-
         if (err2) {
-
           console.log(err2);
 
           return res.json({
@@ -695,7 +562,7 @@ app.post("/api/logout", (req, res) => {
         res.json({
           message: "Logout successful",
         });
-      }
+      },
     );
   });
 });
@@ -765,87 +632,60 @@ app.get("/api/employees", (req, res) => {
 // ============================
 // ➕ ADD EMPLOYEE
 // ============================
-app.post(
-  "/api/employees",
-  upload.single("profile_image"),
-  async (req, res) => {
-    try {
+app.post("/api/employees", upload.single("profile_image"), async (req, res) => {
+  try {
+    const { first_name, last_name, email, password, role, department, phone } =
+      req.body;
 
-      const {
-        first_name,
-        last_name,
-        email,
-        password,
-        role,
-        department,
-        phone,
-      } = req.body;
+    if (!first_name || !last_name || !email || !password) {
+      return res.json({
+        error: "Missing required fields",
+      });
+    }
 
-      if (
-        !first_name ||
-        !last_name ||
-        !email ||
-        !password
-      ) {
-        return res.json({
-          error: "Missing required fields",
-        });
-      }
+    let profileImage = "";
 
-      let profileImage = "";
+    if (req.file) {
+      profileImage = `http://127.0.0.1:8000/uploads/${req.file.filename}`;
+    }
 
-      if (req.file) {
-        profileImage =
-          `http://127.0.0.1:8000/uploads/${req.file.filename}`;
-      }
-
-      const checkQuery = `
+    const checkQuery = `
         SELECT * FROM users
         WHERE LOWER(email)=LOWER(?)
       `;
 
-      db.query(
-        checkQuery,
-        [email],
-        async (err, existing) => {
+    db.query(checkQuery, [email], async (err, existing) => {
+      if (err) {
+        return res.json({
+          error: "DB error",
+        });
+      }
 
-          if (err) {
-            return res.json({
-              error: "DB error",
-            });
-          }
+      if (existing.length > 0) {
+        return res.json({
+          error: "Email already exists",
+        });
+      }
 
-          if (existing.length > 0) {
-            return res.json({
-              error: "Email already exists",
-            });
-          }
-
-          const countQuery = `
+      const countQuery = `
             SELECT COUNT(*) as total
             FROM users WHERE role = 'employee'
           `;
 
-          db.query(
-            countQuery,
-            async (err2, countRes) => {
+      db.query(countQuery, async (err2, countRes) => {
+        if (err2) {
+          return res.json({
+            error: "DB error",
+          });
+        }
 
-              if (err2) {
-                return res.json({
-                  error: "DB error",
-                });
-              }
+        const count = countRes[0].total + 1;
 
-              const count =
-                countRes[0].total + 1;
+        const staff_id = `EMP${String(count).padStart(3, "0")}`;
 
-              const staff_id =
-                `EMP${String(count).padStart(3, "0")}`;
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-              const hashedPassword =
-                await bcrypt.hash(password, 10);
-
-              const insertQuery = `
+        const insertQuery = `
                 INSERT INTO users (
                   staff_id,
                   first_name,
@@ -860,52 +700,43 @@ app.post(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
               `;
 
-              db.query(
-                insertQuery,
-                [
-                  staff_id,
-                  first_name,
-                  last_name,
-                  email.toLowerCase(),
-                  hashedPassword,
-                  role || "employee",
-                  department || "",
-                  phone || "",
-                  profileImage,
-                ],
-                (err3) => {
+        db.query(
+          insertQuery,
+          [
+            staff_id,
+            first_name,
+            last_name,
+            email.toLowerCase(),
+            hashedPassword,
+            role || "employee",
+            department || "",
+            phone || "",
+            profileImage,
+          ],
+          (err3) => {
+            if (err3) {
+              console.log(err3);
 
-                  if (err3) {
-                    console.log(err3);
-
-                    return res.json({
-                      error: "Insert failed",
-                    });
-                  }
-
-                  res.json({
-                    message:
-                      "Employee added successfully",
-                  });
-
-                }
-              );
+              return res.json({
+                error: "Insert failed",
+              });
             }
-          );
-        }
-      );
 
-    } catch (err) {
-
-      console.log(err);
-
-      res.json({
-        error: "Server error",
+            res.json({
+              message: "Employee added successfully",
+            });
+          },
+        );
       });
+    });
+  } catch (err) {
+    console.log(err);
 
-    }
+    res.json({
+      error: "Server error",
+    });
   }
-);
+});
 
 // ============================
 // ✏️ UPDATE EMPLOYEE
@@ -917,18 +748,12 @@ app.put(
     try {
       const { id } = req.params;
 
-      const {
-        first_name,
-        last_name,
-        department,
-        phone,
-      } = req.body;
+      const { first_name, last_name, department, phone } = req.body;
 
       let profileImage = null;
 
       if (req.file) {
-        profileImage =
-          `http://127.0.0.1:8000/uploads/${req.file.filename}`;
+        profileImage = `http://127.0.0.1:8000/uploads/${req.file.filename}`;
       }
 
       let query = `
@@ -940,12 +765,7 @@ app.put(
           phone = ?
       `;
 
-      const params = [
-        first_name,
-        last_name,
-        department,
-        phone,
-      ];
+      const params = [first_name, last_name, department, phone];
 
       if (profileImage) {
         query += `,
@@ -971,11 +791,9 @@ app.put(
         }
 
         res.json({
-          message:
-            "Employee updated successfully",
+          message: "Employee updated successfully",
         });
       });
-
     } catch (err) {
       console.log(err);
 
@@ -983,7 +801,7 @@ app.put(
         error: "Server error",
       });
     }
-  }
+  },
 );
 
 // ============================
@@ -1017,14 +835,7 @@ app.put("/api/employees/delete/:id", (req, res) => {
 // 📊 ATTENDANCE
 // ============================
 app.get("/api/attendance", (req, res) => {
-  const {
-    staffId,
-    fromDate,
-    toDate,
-    shift,
-    page = 1,
-    limit = 10,
-  } = req.query;
+  const { staffId, fromDate, toDate, shift, page = 1, limit = 10 } = req.query;
 
   let baseQuery = `
     FROM attendance a
@@ -1073,7 +884,6 @@ app.get("/api/attendance", (req, res) => {
   `;
 
   db.query(countQuery, params, (err, countRes) => {
-
     if (err) {
       return res.json({
         error: "DB error",
@@ -1082,18 +892,12 @@ app.get("/api/attendance", (req, res) => {
 
     const total = countRes[0].total;
 
-    const totalPages =
-      Math.ceil(total / limit);
+    const totalPages = Math.ceil(total / limit);
 
     db.query(
       dataQuery,
-      [
-        ...params,
-        parseInt(limit),
-        parseInt(offset),
-      ],
+      [...params, parseInt(limit), parseInt(offset)],
       (err2, results) => {
-
         if (err2) {
           return res.json({
             error: "DB error",
@@ -1105,7 +909,7 @@ app.get("/api/attendance", (req, res) => {
           totalPages,
           total,
         });
-      }
+      },
     );
   });
 });
@@ -1114,13 +918,7 @@ app.get("/api/attendance", (req, res) => {
 // 📥 EXPORT
 // ============================
 app.get("/api/export", (req, res) => {
-
-  const {
-    staffId,
-    fromDate,
-    toDate,
-    shift,
-  } = req.query;
+  const { staffId, fromDate, toDate, shift } = req.query;
 
   let query = `
     SELECT
@@ -1170,21 +968,19 @@ app.get("/api/export", (req, res) => {
     if (err) {
       console.log(err);
 
-      return res
-        .status(500)
-        .send("Export failed");
+      return res.status(500).send("Export failed");
     }
 
-    const workbook =
-      new ExcelJS.Workbook();
+    const workbook = new ExcelJS.Workbook();
 
+    // ============================
     // ✅ GROUP EMPLOYEES
+    // ============================
     const groupedEmployees = {};
 
     results.forEach((r) => {
 
-      const key =
-        r.staff_id || "UNKNOWN";
+      const key = r.staff_id || "UNKNOWN";
 
       if (!groupedEmployees[key]) {
         groupedEmployees[key] = [];
@@ -1193,121 +989,367 @@ app.get("/api/export", (req, res) => {
       groupedEmployees[key].push(r);
     });
 
-    // ✅ CREATE SEPARATE SHEETS
-    Object.keys(groupedEmployees).forEach(
-      (staffKey) => {
+    // ============================
+    // ✅ CREATE SHEETS
+    // ============================
+    Object.keys(groupedEmployees).forEach((staffKey) => {
 
-        const employeeRecords =
-          groupedEmployees[staffKey];
+      const employeeRecords =
+        groupedEmployees[staffKey];
 
-        const employeeName =
-          `${employeeRecords[0]?.first_name || ""}
-          ${employeeRecords[0]?.last_name || ""}`
-          .trim();
+      const employeeName =
+        `${employeeRecords[0]?.first_name || ""}
+        ${employeeRecords[0]?.last_name || ""}`.trim();
 
-        const sheetName =
-          `${staffKey}`.substring(0, 31);
+      const sheetName =
+        `${staffKey}`.substring(0, 31);
 
-        const worksheet =
-          workbook.addWorksheet(sheetName);
+      const worksheet =
+        workbook.addWorksheet(sheetName);
 
-        worksheet.columns = [
-          {
-            header: "Staff ID",
-            key: "staff_id",
-            width: 15,
-          },
-          {
-            header: "Employee",
-            key: "employee",
-            width: 30,
-          },
-          {
-            header: "Date",
-            key: "date",
-            width: 18,
-          },
-          {
-            header: "Shift",
-            key: "shift",
-            width: 15,
-          },
-          {
-            header: "Login Time",
-            key: "login",
-            width: 20,
-          },
-          {
-            header: "Logout Time",
-            key: "logout",
-            width: 20,
-          },
-          {
-            header: "Total Hours",
-            key: "hours",
-            width: 15,
-          },
-        ];
+      // ============================
+      // ✅ TITLE
+      // ============================
+      worksheet.mergeCells("A1:H1");
 
-        // ✅ HEADER STYLE
-        worksheet.getRow(1).font = {
+      const titleCell =
+        worksheet.getCell("A1");
+
+      titleCell.value =
+        `${employeeName} Attendance Report`;
+
+      titleCell.font = {
+        bold: true,
+        size: 16,
+      };
+
+      titleCell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+
+      // ============================
+      // ✅ COLUMNS
+      // ============================
+      worksheet.columns = [
+        {
+          header: "Staff ID",
+          key: "staff_id",
+          width: 15,
+        },
+        {
+          header: "Employee",
+          key: "employee",
+          width: 30,
+        },
+        {
+          header: "Date",
+          key: "date",
+          width: 18,
+        },
+        {
+          header: "Shift",
+          key: "shift",
+          width: 18,
+        },
+        {
+          header: "Login Time",
+          key: "login",
+          width: 20,
+        },
+        {
+          header: "Logout Time",
+          key: "logout",
+          width: 20,
+        },
+        {
+          header: "Total Hours",
+          key: "hours",
+          width: 15,
+        },
+        {
+          header: "Status",
+          key: "status",
+          width: 25,
+        },
+      ];
+
+      // ============================
+      // ✅ HEADER ROW
+      // ============================
+      const headerRow =
+        worksheet.getRow(3);
+
+      headerRow.values = [
+        "Staff ID",
+        "Employee",
+        "Date",
+        "Shift",
+        "Login Time",
+        "Logout Time",
+        "Total Hours",
+        "Status",
+      ];
+
+      headerRow.eachCell((cell) => {
+
+        cell.font = {
           bold: true,
+          color: {
+            argb: "FFFFFFFF",
+          },
         };
 
-        // ✅ ROWS
-        employeeRecords.forEach((r) => {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: {
+            argb: "4F46E5",
+          },
+        };
 
-          worksheet.addRow({
-            staff_id:
-              r.staff_id || "-",
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle",
+        };
 
-            employee:
-              employeeName || r.user,
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+      });
 
-            date: new Date(
-              r.login_time
-            ).toLocaleDateString(),
+      // ============================
+      // ✅ ATTENDANCE DATA
+      // ============================
+      employeeRecords.forEach((r) => {
 
-            shift: r.shift,
+        const row = worksheet.addRow({
 
-            login: new Date(
-              r.login_time
-            ).toLocaleTimeString(),
+          staff_id:
+            r.staff_id || "-",
 
-            logout: r.logout_time
-              ? new Date(
-                  r.logout_time
-                ).toLocaleTimeString()
-              : "-",
+          employee:
+            employeeName || r.user,
 
-            hours:
-              r.total_hours || 0,
-          });
+          date: new Date(
+            r.login_time
+          ).toLocaleDateString(),
+
+          shift:
+            r.shift,
+
+          login: new Date(
+            r.login_time
+          ).toLocaleTimeString(),
+
+          logout: r.logout_time
+            ? new Date(
+                r.logout_time
+              ).toLocaleTimeString()
+            : "-",
+
+          hours:
+            r.total_hours || 0,
+
+          status:
+            r.logout_status || "Normal",
         });
-      }
-    );
 
+        row.eachCell((cell) => {
+
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+          };
+
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" },
+          };
+        });
+
+        // ============================
+        // ✅ OFF → FULL RED ROW
+        // ============================
+        if (r.logout_status === "Off") {
+
+          row.eachCell((cell) => {
+
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: {
+                argb: "FF0000",
+              },
+            };
+
+            cell.font = {
+              bold: true,
+            };
+          });
+        }
+
+        // ============================
+        // ✅ EMERGENCY → STATUS ONLY
+        // ============================
+        if (
+          r.logout_status === "Emergency Logout"
+        ) {
+
+          const statusCell =
+            row.getCell(8);
+
+          statusCell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb: "FFFF00",
+            },
+          };
+
+          statusCell.font = {
+            bold: true,
+          };
+        }
+      });
+
+      // ============================
+      // ✅ OFF SUMMARY TABLE
+      // ONLY EMP001 SHEET
+      // ============================
+      if (staffKey === "EMP001") {
+
+        const startRow =
+          worksheet.rowCount + 4;
+
+        // ✅ TITLE
+        const summaryTitle =
+          worksheet.getCell(`A${startRow}`);
+
+        summaryTitle.value =
+          "Monthly OFF Summary";
+
+        summaryTitle.font = {
+          bold: true,
+          size: 14,
+        };
+
+        // ✅ HEADER
+        const summaryHeader =
+          worksheet.getRow(startRow + 1);
+
+        summaryHeader.values = [
+          "EMP Code",
+          "Name",
+          "Total OFF",
+        ];
+
+        summaryHeader.eachCell((cell) => {
+
+          cell.font = {
+            bold: true,
+            color: {
+              argb: "FFFFFFFF",
+            },
+          };
+
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb: "4F46E5",
+            },
+          };
+
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+          };
+
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" },
+          };
+        });
+
+        // ✅ DATA
+        Object.keys(groupedEmployees)
+          .forEach((empKey) => {
+
+            const empRecords =
+              groupedEmployees[empKey];
+
+            const offCount =
+              empRecords.filter(
+                (r) =>
+                  r.logout_status === "Off"
+              ).length;
+
+            const empName =
+              `${empRecords[0]?.first_name || ""}
+              ${empRecords[0]?.last_name || ""}`
+              .trim();
+
+            const summaryRow =
+              worksheet.addRow([
+                empKey,
+                empName,
+                offCount,
+              ]);
+
+            summaryRow.eachCell((cell) => {
+
+              cell.alignment = {
+                horizontal: "center",
+                vertical: "middle",
+              };
+
+              cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+              };
+            });
+          });
+      }
+    });
+
+    // ============================
     // ✅ FILE NAME
+    // ============================
     let fileName =
       "attendance_report.xlsx";
 
     if (fromDate && toDate) {
+
       fileName =
         `attendance_${fromDate}_to_${toDate}.xlsx`;
     }
 
+    // ============================
     // ✅ RESPONSE HEADERS
+    // ============================
     res.setHeader(
       "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
 
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=${fileName}`
+      `attachment; filename=${fileName}`,
     );
 
+    // ============================
     // ✅ SEND FILE
+    // ============================
     await workbook.xlsx.write(res);
 
     res.end();
@@ -1315,7 +1357,5 @@ app.get("/api/export", (req, res) => {
 });
 
 app.listen(8000, () => {
-  console.log(
-    "🚀 Server running on http://127.0.0.1:8000"
-  );
+  console.log("🚀 Server running on http://127.0.0.1:8000");
 });
