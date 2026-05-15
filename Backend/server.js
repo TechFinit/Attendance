@@ -75,11 +75,11 @@ const autoCloseSessions = () => {
       // Night: 7 PM - 4 AM
       // ============================
 
-      if (record.shift === "Morning Shift") {
+      if (record.shift === "Morning") {
         autoLogoutTime.setHours(19);
         autoLogoutTime.setMinutes(0);
         autoLogoutTime.setSeconds(0);
-      } else if (record.shift === "Night Shift") {
+      } else if (record.shift === "Night") {
         autoLogoutTime.setDate(autoLogoutTime.getDate() + 1);
 
         autoLogoutTime.setHours(4);
@@ -376,7 +376,7 @@ app.post("/api/login", (req, res) => {
 
           const currentHour = now.getHours();
 
-          let shift = "Morning Shift";
+          let shift = "Morning";
 
           let loginLimitHour = 10;
 
@@ -387,10 +387,10 @@ app.post("/api/login", (req, res) => {
           // ============================
           if (currentMode === "Summer Schedule") {
             if (currentHour >= 19 || currentHour < 4) {
-              shift = "Night Shift";
+              shift = "Night";
               loginLimitHour = 19;
             } else {
-              shift = "Morning Shift";
+              shift = "Morning";
               loginLimitHour = 10;
             }
           }
@@ -402,10 +402,10 @@ app.post("/api/login", (req, res) => {
           // ============================
           else {
             if (currentHour >= 20 || currentHour < 5) {
-              shift = "Night Shift";
+              shift = "Night";
               loginLimitHour = 20;
             } else {
-              shift = "Morning Shift";
+              shift = "Morning";
               loginLimitHour = 11;
             }
           }
@@ -423,7 +423,7 @@ app.post("/api/login", (req, res) => {
 
           // ✅ DST MODE
           if (currentMode === "Summer Schedule") {
-            if (shift === "Morning Shift") {
+            if (shift === "Morning") {
               // 10:00 AM
               allowedMinutes = 10 * 60;
             } else {
@@ -434,7 +434,7 @@ app.post("/api/login", (req, res) => {
 
           // ✅ GMT MODE
           else {
-            if (shift === "Morning Shift") {
+            if (shift === "Morning") {
               // 11:00 AM
               allowedMinutes = 11 * 60;
             } else {
@@ -997,9 +997,7 @@ app.get("/api/export", (req, res) => {
       const employeeRecords =
         groupedEmployees[staffKey];
 
-      const employeeName =
-        `${employeeRecords[0]?.first_name || ""}
-        ${employeeRecords[0]?.last_name || ""}`.trim();
+      const employeeName = employeeRecords[0]?.first_name || "";
 
       const sheetName =
         `${staffKey}`.substring(0, 31);
@@ -1292,10 +1290,7 @@ app.get("/api/export", (req, res) => {
                   r.logout_status === "Off"
               ).length;
 
-            const empName =
-              `${empRecords[0]?.first_name || ""}
-              ${empRecords[0]?.last_name || ""}`
-              .trim();
+            const empName = empRecords[0]?.first_name || "";
 
             const summaryRow =
               worksheet.addRow([
