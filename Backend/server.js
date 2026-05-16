@@ -26,6 +26,104 @@ db.connect((err) => {
   if (err) console.log("❌ DB ERROR:", err);
   else console.log("✅ MySQL Connected");
 });
+// ============================
+// 🕒 TIME CONVERTER
+// ============================
+const convertToMinutes = (time) => {
+  const [hours, minutes] = time.split(":").map(Number);
+
+  return hours * 60 + minutes;
+};
+
+// ============================
+// ✅ GET ACTIVE SHIFT SETTINGS
+// ============================
+const getActiveShiftSettings = () => {
+  return new Promise((resolve, reject) => {
+    const query = `
+      SELECT *
+      FROM shift_settings
+      WHERE is_active = 1
+      LIMIT 1
+    `;
+
+    db.query(query, (err, results) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (results.length === 0) {
+          reject("No active shift settings");
+        } else {
+          resolve(results[0]);
+        }
+      }
+    });
+  });
+};
+
+// ============================
+// 📥 FETCH SHIFT SETTINGS API
+// ============================
+app.get("/api/shift-settings", async (req, res) => {
+  const query = `
+    SELECT *
+    FROM shift_settings
+    ORDER BY id ASC
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.log(err);
+
+      return res.json({
+        error: "Failed to fetch settings",
+      });
+    }
+    res.json(results);
+  });
+});
+
+// ============================
+// 🔄 TOGGLE SHIFT MODE
+// ============================
+app.put("/api/shift-settings/:id", (req, res) => {
+  const { id } = req.params;
+
+  const resetQuery = `
+    UPDATE shift_settings
+    SET is_active = 0
+  `;
+
+  db.query(resetQuery, (err) => {
+    if (err) {
+      console.log(err);
+
+      return res.json({
+        error: "Reset failed",
+      });
+    }
+
+    const activateQuery = `
+      UPDATE shift_settings
+      SET is_active = 1
+      WHERE id = ?
+    `;
+
+    db.query(activateQuery, [id], (err2) => {
+      if (err2) {
+        console.log(err2);
+
+        return res.json({
+          error: "Activation failed",
+        });
+      }
+
+      res.json({
+        message: "Shift updated successfully",
+      });
+    });
+  });
+});
 
 // ============================
 // 📸 MULTER STORAGE
@@ -49,71 +147,79 @@ const upload = multer({
 // ============================
 // 🔥 AUTO CLOSE OLD SESSIONS
 // ============================
-const autoCloseSessions = () => {
-  const query = `
-    SELECT *
-    FROM attendance
-    WHERE logout_time IS NULL
-  `;
+const autoCloseSessions = async () => {
+  try {
+    const settings = await getActiveShiftSettings();
 
-  db.query(query, (err, results) => {
-    if (err) {
-      console.log("AUTO CLOSE ERROR:", err);
-      return;
-    }
+    const query = `
+      SELECT *
+      FROM attendance
+      WHERE logout_time IS NULL
+    `;
 
-    const now = new Date();
-
-    results.forEach((record) => {
-      const loginTime = new Date(record.login_time);
-
-      let autoLogoutTime = new Date(loginTime);
-
-      // ============================
-      // ✅ DST MODE
-      // Morning: 10 AM - 7 PM
-      // Night: 7 PM - 4 AM
-      // ============================
-
-      if (record.shift === "Morning") {
-        autoLogoutTime.setHours(19);
-        autoLogoutTime.setMinutes(0);
-        autoLogoutTime.setSeconds(0);
-      } else if (record.shift === "Night") {
-        autoLogoutTime.setDate(autoLogoutTime.getDate() + 1);
-
-        autoLogoutTime.setHours(4);
-        autoLogoutTime.setMinutes(0);
-        autoLogoutTime.setSeconds(0);
+    db.query(query, (err, results) => {
+      if (err) {
+        console.log("AUTO CLOSE ERROR:", err);
+        return;
       }
 
-      // ✅ AUTO CLOSE SESSION
-      if (now >= autoLogoutTime) {
-        const totalHours = (autoLogoutTime - loginTime) / (1000 * 60 * 60);
+      const now = new Date();
 
-        const updateQuery = `
-          UPDATE attendance
-          SET
-            logout_time = ?,
-            total_hours = ?,
-            logout_status = ?
-          WHERE id = ?
-        `;
+      results.forEach((record) => {
+        const loginTime = new Date(record.login_time);
 
-        db.query(
-          updateQuery,
-          [autoLogoutTime, totalHours.toFixed(2), "Auto Closed", record.id],
-          (updateErr) => {
-            if (updateErr) {
-              console.log("AUTO UPDATE ERROR:", updateErr);
-            } else {
-              console.log(`✅ AUTO CLOSED: ${record.user}`);
-            }
-          },
-        );
-      }
+        let autoLogoutTime = new Date(loginTime);
+
+        // ✅ MORNING
+        if (record.shift === "Morning") {
+          const [hours, minutes] = settings.day_logout.split(":");
+
+          autoLogoutTime.setHours(hours);
+          autoLogoutTime.setMinutes(minutes);
+          autoLogoutTime.setSeconds(0);
+        }
+
+        // ✅ NIGHT
+        else if (record.shift === "Night") {
+          const [hours, minutes] = settings.night_logout.split(":");
+
+          autoLogoutTime.setDate(autoLogoutTime.getDate() + 1);
+
+          autoLogoutTime.setHours(hours);
+          autoLogoutTime.setMinutes(minutes);
+          autoLogoutTime.setSeconds(0);
+        }
+
+        // ✅ AUTO CLOSE
+        if (now >= autoLogoutTime) {
+          const totalHours = (autoLogoutTime - loginTime) / (1000 * 60 * 60);
+
+          const updateQuery = `
+            UPDATE attendance
+            SET
+              logout_time = ?,
+              total_hours = ?,
+              logout_status = ?
+            WHERE id = ?
+          `;
+
+          db.query(
+            updateQuery,
+            [autoLogoutTime, totalHours.toFixed(2), "Auto Closed", record.id],
+            (updateErr) => {
+              if (updateErr) {
+                console.log("AUTO UPDATE ERROR:", updateErr);
+              } else {
+                console.log(`✅ AUTO CLOSED: ${record.user}`);
+              }
+            },
+          );
+        }
+      });
     });
-  });
+  } catch (err) {
+    console.log(err);
+  }
 };
 
 // ✅ RUN AUTO CLOSE EVERY 1 MINUTE
@@ -189,63 +295,6 @@ const autoCreateOffRecords = () => {
 setInterval(() => {
   autoCreateOffRecords();
 }, 60000);
-
-// ============================
-// 🌍 UK SHIFT LOGIC (BST / GMT)
-// ============================
-const getShift = () => {
-  // ✅ CURRENT INDIA TIME
-  const now = new Date();
-
-  const indiaTime = new Date(
-    now.toLocaleString("en-US", {
-      timeZone: "Asia/Kolkata",
-    }),
-  );
-
-  const hour = indiaTime.getHours();
-  const minutes = indiaTime.getMinutes();
-
-  const currentTime = hour + minutes / 60;
-
-  // ✅ CHECK UK DAYLIGHT SAVING
-  const ukDateString = now.toLocaleString("en-GB", {
-    timeZone: "Europe/London",
-    timeZoneName: "short",
-  });
-
-  // BST = Daylight Saving
-  // GMT = Normal UK Time
-  const isBST = ukDateString.includes("BST");
-
-  // ============================
-  // ✅ BST TIMINGS
-  // India:
-  // Morning → 10 AM - 7 PM
-  // Night   → 7 PM - 4 AM
-  // ============================
-  if (isBST) {
-    if (currentTime >= 10 && currentTime < 19) {
-      return "Morning Shift";
-    }
-
-    return "Night Shift";
-  }
-
-  // ============================
-  // ✅ GMT TIMINGS
-  // India:
-  // Morning → 11 AM - 8 PM
-  // Night   → 8 PM - 5 AM
-  // ============================
-  else {
-    if (currentTime >= 11 && currentTime < 20) {
-      return "Morning Shift";
-    }
-
-    return "Night Shift";
-  }
-};
 
 // ============================
 // 🔐 LOGIN
@@ -352,105 +401,39 @@ app.post("/api/login", (req, res) => {
         // ============================
         // ✅ GET CURRENT MODE
         // ============================
-        const modeQuery = `
-          SELECT *
-          FROM shift_settings
-          WHERE is_active = 1
-          LIMIT 1
-        `;
+        getActiveShiftSettings()
+          .then((settings) => {
+            const now = new Date();
 
-        db.query(modeQuery, (err4, modeResult) => {
-          if (err4) {
-            return res.json({
-              error: "Shift settings error",
-            });
-          }
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-          let currentMode = "Summer Schedule";
+            const dayLoginMinutes = convertToMinutes(settings.day_login);
 
-          if (modeResult.length > 0) {
-            currentMode = modeResult[0].mode;
-          }
+            const dayLogoutMinutes = convertToMinutes(settings.day_logout);
 
-          const now = new Date();
+            let shift = "Morning";
 
-          const currentHour = now.getHours();
-
-          let shift = "Morning";
-
-          let loginLimitHour = 10;
-
-          // ============================
-          // ✅ DST MODE
-          // 10 AM - 7 PM
-          // 7 PM - 4 AM
-          // ============================
-          if (currentMode === "Summer Schedule") {
-            if (currentHour >= 19 || currentHour < 4) {
+            // ✅ NIGHT SHIFT
+            if (currentMinutes >= dayLogoutMinutes || currentMinutes < 360) {
               shift = "Night";
-              loginLimitHour = 19;
-            } else {
-              shift = "Morning";
-              loginLimitHour = 10;
             }
-          }
 
-          // ============================
-          // ✅ GMT MODE
-          // 11 AM - 8 PM
-          // 8 PM - 5 AM
-          // ============================
-          else {
-            if (currentHour >= 20 || currentHour < 5) {
-              shift = "Night";
-              loginLimitHour = 20;
-            } else {
-              shift = "Morning";
-              loginLimitHour = 11;
+            // ============================
+            // ✅ STATUS
+            // ============================
+            let logoutStatus = "Working";
+
+            let allowedMinutes =
+              shift === "Morning" ? dayLoginMinutes : dayLogoutMinutes;
+
+            // ✅ LATE
+            if (currentMinutes > allowedMinutes) {
+              logoutStatus = "Late";
             }
-          }
 
-          // ============================
-          // ✅ STATUS
-          // ============================
-          let logoutStatus = "Working";
+            const loginTime = new Date();
 
-          const currentMinutes = now.getMinutes();
-
-          const totalCurrentMinutes = currentHour * 60 + currentMinutes;
-
-          let allowedMinutes = 0;
-
-          // ✅ DST MODE
-          if (currentMode === "Summer Schedule") {
-            if (shift === "Morning") {
-              // 10:00 AM
-              allowedMinutes = 10 * 60;
-            } else {
-              // 7:00 PM
-              allowedMinutes = 19 * 60;
-            }
-          }
-
-          // ✅ GMT MODE
-          else {
-            if (shift === "Morning") {
-              // 11:00 AM
-              allowedMinutes = 11 * 60;
-            } else {
-              // 8:00 PM
-              allowedMinutes = 20 * 60;
-            }
-          }
-
-          // ✅ CHECK LATE
-          if (totalCurrentMinutes > allowedMinutes) {
-            logoutStatus = "Late";
-          }
-
-          const loginTime = new Date();
-
-          const insertQuery = `
+            const insertQuery = `
             INSERT INTO attendance (
               user,
               login_time,
@@ -460,29 +443,37 @@ app.post("/api/login", (req, res) => {
             VALUES (?, ?, ?, ?)
           `;
 
-          db.query(
-            insertQuery,
-            [username, loginTime, shift, logoutStatus],
-            (err5) => {
-              if (err5) {
-                console.log(err5);
+            db.query(
+              insertQuery,
+              [username, loginTime, shift, logoutStatus],
+              (err5) => {
+                if (err5) {
+                  console.log(err5);
+
+                  return res.json({
+                    error: "Insert failed",
+                  });
+                }
 
                 return res.json({
-                  error: "Insert failed",
+                  role: "employee",
+                  alreadyLoggedIn: false,
+                  user: username,
+                  login_time: loginTime,
+                  shift,
+                  logoutStatus: logoutStatus,
                 });
-              }
+              },
+            );
+          })
 
-              return res.json({
-                role: "employee",
-                alreadyLoggedIn: false,
-                user: username,
-                login_time: loginTime,
-                shift,
-                logoutStatus: logoutStatus,
-              });
-            },
-          );
-        });
+          .catch(() => {
+            return res.json({
+              error: "Shift settings error",
+            });
+          });
+
+        return;
       });
     });
   });
@@ -960,11 +951,10 @@ app.get("/api/export", (req, res) => {
   query += `
     ORDER BY
       u.staff_id ASC,
-      a.login_time DESC
+      a.login_time ASC
   `;
 
   db.query(query, params, async (err, results) => {
-
     if (err) {
       console.log(err);
 
@@ -979,7 +969,6 @@ app.get("/api/export", (req, res) => {
     const groupedEmployees = {};
 
     results.forEach((r) => {
-
       const key = r.staff_id || "UNKNOWN";
 
       if (!groupedEmployees[key]) {
@@ -993,28 +982,22 @@ app.get("/api/export", (req, res) => {
     // ✅ CREATE SHEETS
     // ============================
     Object.keys(groupedEmployees).forEach((staffKey) => {
-
-      const employeeRecords =
-        groupedEmployees[staffKey];
+      const employeeRecords = groupedEmployees[staffKey];
 
       const employeeName = employeeRecords[0]?.first_name || "";
 
-      const sheetName =
-        `${staffKey}`.substring(0, 31);
+      const sheetName = `${staffKey}`.substring(0, 31);
 
-      const worksheet =
-        workbook.addWorksheet(sheetName);
+      const worksheet = workbook.addWorksheet(sheetName);
 
       // ============================
       // ✅ TITLE
       // ============================
       worksheet.mergeCells("A1:H1");
 
-      const titleCell =
-        worksheet.getCell("A1");
+      const titleCell = worksheet.getCell("A1");
 
-      titleCell.value =
-        `${employeeName} Attendance Report`;
+      titleCell.value = `${employeeName} Attendance Report`;
 
       titleCell.font = {
         bold: true,
@@ -1075,8 +1058,7 @@ app.get("/api/export", (req, res) => {
       // ============================
       // ✅ HEADER ROW
       // ============================
-      const headerRow =
-        worksheet.getRow(3);
+      const headerRow = worksheet.getRow(3);
 
       headerRow.values = [
         "Staff ID",
@@ -1090,7 +1072,6 @@ app.get("/api/export", (req, res) => {
       ];
 
       headerRow.eachCell((cell) => {
-
         cell.font = {
           bold: true,
           color: {
@@ -1120,44 +1101,55 @@ app.get("/api/export", (req, res) => {
       });
 
       // ============================
+      // ✅ SORT ASCENDING DATE
+      // ============================
+      employeeRecords.sort(
+        (a, b) => new Date(a.login_time) - new Date(b.login_time),
+      );
+
+      // ============================
       // ✅ ATTENDANCE DATA
       // ============================
       employeeRecords.forEach((r) => {
+        // ✅ HUMAN READABLE HOURS
+        const totalHours = parseFloat(r.total_hours || 0);
+
+        const hrs = Math.floor(totalHours);
+
+        const mins = Math.round((totalHours - hrs) * 60);
+
+        let readableHours = "0 mins";
+
+        if (hrs === 0) {
+          readableHours = `${mins} mins`;
+        } else if (mins === 0) {
+          readableHours = `${hrs} hrs`;
+        } else {
+          readableHours = `${hrs} hrs ${mins} mins`;
+        }
 
         const row = worksheet.addRow({
+          staff_id: r.staff_id || "-",
 
-          staff_id:
-            r.staff_id || "-",
+          employee: employeeName || r.user,
 
-          employee:
-            employeeName || r.user,
+          date: new Date(r.login_time).toLocaleDateString(),
 
-          date: new Date(
-            r.login_time
-          ).toLocaleDateString(),
+          shift: r.shift,
 
-          shift:
-            r.shift,
-
-          login: new Date(
-            r.login_time
-          ).toLocaleTimeString(),
+          login: new Date(r.login_time).toLocaleTimeString(),
 
           logout: r.logout_time
-            ? new Date(
-                r.logout_time
-              ).toLocaleTimeString()
+            ? new Date(r.logout_time).toLocaleTimeString()
             : "-",
 
-          hours:
-            r.total_hours || 0,
+          // ✅ UPDATED HOURS FORMAT
+          hours: readableHours,
 
-          status:
-            r.logout_status || "Normal",
+          status: r.logout_status || "Normal",
         });
 
         row.eachCell((cell) => {
-
           cell.alignment = {
             horizontal: "center",
             vertical: "middle",
@@ -1175,9 +1167,7 @@ app.get("/api/export", (req, res) => {
         // ✅ OFF → FULL RED ROW
         // ============================
         if (r.logout_status === "Off") {
-
           row.eachCell((cell) => {
-
             cell.fill = {
               type: "pattern",
               pattern: "solid",
@@ -1195,12 +1185,8 @@ app.get("/api/export", (req, res) => {
         // ============================
         // ✅ EMERGENCY → STATUS ONLY
         // ============================
-        if (
-          r.logout_status === "Emergency Logout"
-        ) {
-
-          const statusCell =
-            row.getCell(8);
+        if (r.logout_status === "Emergency Logout") {
+          const statusCell = row.getCell(8);
 
           statusCell.fill = {
             type: "pattern",
@@ -1221,16 +1207,12 @@ app.get("/api/export", (req, res) => {
       // ONLY EMP001 SHEET
       // ============================
       if (staffKey === "EMP001") {
-
-        const startRow =
-          worksheet.rowCount + 4;
+        const startRow = worksheet.rowCount + 4;
 
         // ✅ TITLE
-        const summaryTitle =
-          worksheet.getCell(`A${startRow}`);
+        const summaryTitle = worksheet.getCell(`A${startRow}`);
 
-        summaryTitle.value =
-          "Monthly OFF Summary";
+        summaryTitle.value = "Monthly OFF Summary";
 
         summaryTitle.font = {
           bold: true,
@@ -1238,17 +1220,11 @@ app.get("/api/export", (req, res) => {
         };
 
         // ✅ HEADER
-        const summaryHeader =
-          worksheet.getRow(startRow + 1);
+        const summaryHeader = worksheet.getRow(startRow + 1);
 
-        summaryHeader.values = [
-          "EMP Code",
-          "Name",
-          "Total OFF",
-        ];
+        summaryHeader.values = ["EMP Code", "Name", "Total OFF"];
 
         summaryHeader.eachCell((cell) => {
-
           cell.font = {
             bold: true,
             color: {
@@ -1278,55 +1254,41 @@ app.get("/api/export", (req, res) => {
         });
 
         // ✅ DATA
-        Object.keys(groupedEmployees)
-          .forEach((empKey) => {
+        Object.keys(groupedEmployees).forEach((empKey) => {
+          const empRecords = groupedEmployees[empKey];
 
-            const empRecords =
-              groupedEmployees[empKey];
+          const offCount = empRecords.filter(
+            (r) => r.logout_status === "Off",
+          ).length;
 
-            const offCount =
-              empRecords.filter(
-                (r) =>
-                  r.logout_status === "Off"
-              ).length;
+          const empName = empRecords[0]?.first_name || "";
 
-            const empName = empRecords[0]?.first_name || "";
+          const summaryRow = worksheet.addRow([empKey, empName, offCount]);
 
-            const summaryRow =
-              worksheet.addRow([
-                empKey,
-                empName,
-                offCount,
-              ]);
+          summaryRow.eachCell((cell) => {
+            cell.alignment = {
+              horizontal: "center",
+              vertical: "middle",
+            };
 
-            summaryRow.eachCell((cell) => {
-
-              cell.alignment = {
-                horizontal: "center",
-                vertical: "middle",
-              };
-
-              cell.border = {
-                top: { style: "thin" },
-                left: { style: "thin" },
-                bottom: { style: "thin" },
-                right: { style: "thin" },
-              };
-            });
+            cell.border = {
+              top: { style: "thin" },
+              left: { style: "thin" },
+              bottom: { style: "thin" },
+              right: { style: "thin" },
+            };
           });
+        });
       }
     });
 
     // ============================
     // ✅ FILE NAME
     // ============================
-    let fileName =
-      "attendance_report.xlsx";
+    let fileName = "attendance_report.xlsx";
 
     if (fromDate && toDate) {
-
-      fileName =
-        `attendance_${fromDate}_to_${toDate}.xlsx`;
+      fileName = `attendance_${fromDate}_to_${toDate}.xlsx`;
     }
 
     // ============================
@@ -1337,10 +1299,7 @@ app.get("/api/export", (req, res) => {
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
 
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=${fileName}`,
-    );
+    res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
 
     // ============================
     // ✅ SEND FILE

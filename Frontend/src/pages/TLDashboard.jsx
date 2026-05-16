@@ -268,6 +268,7 @@ function TLDashboard() {
   // 🔥 LIVE HOURS
   // ============================
   const getLiveHours = (rec) => {
+    let totalHours = 0;
     if (!rec.logout_time) {
       const now = new Date();
 
@@ -275,13 +276,27 @@ function TLDashboard() {
         rec.login_time
       );
 
-      return (
+      totalHours = 
         (now - login) /
         (1000 * 60 * 60)
-      ).toFixed(2);
+    } else {
+      totalHours =
+        parseFloat(rec.total_hours || 0);
     }
 
-    return rec.total_hours || 0;
+    // ✅ CONVERT TO HOURS + MINUTES
+  const hours = Math.floor(totalHours);
+
+  const minutes = Math.round(
+    (totalHours - hours) * 60
+  );
+
+  // ✅ ONLY MINUTES
+  if (hours === 0) {
+    return `${minutes} mins`;
+  }
+
+  return `${hours}h ${minutes}m`;
   };
 
   const getHoursColor = (hours) => {
@@ -310,7 +325,7 @@ function TLDashboard() {
     const m = login.getMinutes();
 
     // ✅ MORNING SHIFT
-    if (rec.shift === "Morning Shift") {
+    if (rec.shift === "Morning") {
 
       // DST → 10 AM
       // GMT → 11 AM
@@ -320,7 +335,7 @@ function TLDashboard() {
     }
 
     // ✅ NIGHT SHIFT
-    if (rec.shift === "Night Shift") {
+    if (rec.shift === "Night") {
 
       return h > 19 || (h === 19 && m > 0);
     }
@@ -335,7 +350,7 @@ function TLDashboard() {
 
     // ✅ MORNING SHIFT
     if (
-      rec.shift === "Morning Shift" &&
+      rec.shift === "Morning" &&
       (hour < 6 || hour >= 18)
     ) {
       return true;
@@ -343,7 +358,7 @@ function TLDashboard() {
 
     // ✅ NIGHT SHIFT
     if (
-      rec.shift === "Night Shift" &&
+      rec.shift === "Night" &&
       hour >= 6 &&
       hour < 18
     ) {
@@ -520,7 +535,7 @@ function TLDashboard() {
                   </option>
 
                   <option value="Day">
-                    Day
+                    Morning
                   </option>
 
                   <option value="Night">
@@ -602,7 +617,7 @@ function TLDashboard() {
 
                         const hours =
                           parseFloat(
-                            getLiveHours(rec)
+                            rec.totalHours || 0
                           );
 
                         const isWorking =
@@ -659,7 +674,7 @@ function TLDashboard() {
                                 hours
                               )}`}
                             >
-                              {hours} hrs
+                              {getLiveHours(rec)}
                             </td>
 
                             <td className="p-3 text-center">
