@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import API_URL from "../config/api";
 
 function EmployeePage() {
   const [username, setUsername] = useState("");
@@ -45,7 +46,7 @@ function EmployeePage() {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const cleanUsername = username.toLowerCase().trim();
 
-      const res = await fetch("http://127.0.0.1:8000/api/login", {
+      const res = await fetch(`${API_URL}/api/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -177,7 +178,7 @@ function EmployeePage() {
         return;
       }
 
-      const res = await fetch("http://127.0.0.1:8000/api/logout", {
+      const res = await fetch(`${API_URL}/api/logout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -225,7 +226,7 @@ function EmployeePage() {
   // ============================
   const fetchTodayStatus = async (user) => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/today", {
+      const res = await fetch(`${API_URL}/api/today`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

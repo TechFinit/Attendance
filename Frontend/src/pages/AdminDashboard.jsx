@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import API_URL from "../config/api";
 
 function AdminDashboard() {
   const [shiftSettings, setShiftSettings] = useState([]);
@@ -12,7 +13,7 @@ function AdminDashboard() {
   const fetchShiftSettings = async () => {
     try {
       const res = await axios.get(
-        "http://127.0.0.1:8000/api/shift-settings",
+        `${API_URL}/api/shift-settings`,
       );
 
       setShiftSettings(res.data);
@@ -33,7 +34,7 @@ function AdminDashboard() {
       setLoading(true);
 
       const res = await axios.put(
-        `http://127.0.0.1:8000/api/shift-settings/${id}`,
+        `${API_URL}/api/shift-settings/${id}`,
       );
 
       setMessage(res.data.message);

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-
+import API_URL from "../config/api";
 import Sidebar from "./Sidebar";
 import EmployeeManagement from "./EmployeeManagement";
 
@@ -42,7 +42,7 @@ function TLDashboard() {
 
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}`
+        `${API_URL}/api/attendance?page=${page}&limit=${limit}`
       );
 
       const data = await res.json();
@@ -77,7 +77,7 @@ function TLDashboard() {
     setLoading(true);
 
     let url =
-      `http://127.0.0.1:8000/api/attendance?page=${page}&limit=${limit}&`;
+      `${API_URL}/api/attendance?page=${page}&limit=${limit}&`;
 
     if (staffId) {
       url += `staffId=${staffId}&`;
@@ -229,7 +229,7 @@ function TLDashboard() {
   // ============================
   const handleDownload = async () => {
     let url =
-      "http://127.0.0.1:8000/api/export?";
+      `${API_URL}/api/export?`;
 
     if (staffId) {
       url += `staffId=${staffId}&`;
@@ -276,7 +276,7 @@ function TLDashboard() {
         rec.login_time
       );
 
-      totalHours = 
+      totalHours =
         (now - login) /
         (1000 * 60 * 60)
     } else {
@@ -285,18 +285,18 @@ function TLDashboard() {
     }
 
     // ✅ CONVERT TO HOURS + MINUTES
-  const hours = Math.floor(totalHours);
+    const hours = Math.floor(totalHours);
 
-  const minutes = Math.round(
-    (totalHours - hours) * 60
-  );
+    const minutes = Math.round(
+      (totalHours - hours) * 60
+    );
 
-  // ✅ ONLY MINUTES
-  if (hours === 0) {
-    return `${minutes} mins`;
-  }
+    // ✅ ONLY MINUTES
+    if (hours === 0) {
+      return `${minutes} mins`;
+    }
 
-  return `${hours}h ${minutes}m`;
+    return `${hours}h ${minutes}m`;
   };
 
   const getHoursColor = (hours) => {
@@ -345,20 +345,29 @@ function TLDashboard() {
 
   const checkShiftViolation = (rec) => {
 
-    const hour =
-      new Date(rec.login_time).getHours();
+    // ✅ Ignore completed sessions
+    if (rec.logout_time) {
+      return false;
+    }
 
-    // ✅ MORNING SHIFT
+    const shift =
+      rec.shift?.toLowerCase();
+
+    // ✅ USE UTC HOURS
+    const hour =
+      new Date(rec.login_time).getUTCHours();
+
+    // ✅ MORNING
     if (
-      rec.shift === "Morning" &&
+      shift === "morning" &&
       (hour < 6 || hour >= 18)
     ) {
       return true;
     }
 
-    // ✅ NIGHT SHIFT
+    // ✅ NIGHT
     if (
-      rec.shift === "Night" &&
+      shift === "night" &&
       hour >= 6 &&
       hour < 18
     ) {
@@ -534,7 +543,7 @@ function TLDashboard() {
                     All Shift
                   </option>
 
-                  <option value="Day">
+                  <option value="Morning">
                     Morning
                   </option>
 
@@ -617,7 +626,7 @@ function TLDashboard() {
 
                         const hours =
                           parseFloat(
-                            rec.totalHours || 0
+                            rec.total_hours || 0
                           );
 
                         const isWorking =
@@ -739,8 +748,8 @@ function TLDashboard() {
                   }
                   disabled={page === 1}
                   className={`px-4 py-2 rounded ${page === 1
-                      ? "bg-gray-200 cursor-not-allowed"
-                      : "bg-gray-300 hover:bg-gray-400"
+                    ? "bg-gray-200 cursor-not-allowed"
+                    : "bg-gray-300 hover:bg-gray-400"
                     }`}
                 >
                   Prev
@@ -763,8 +772,8 @@ function TLDashboard() {
                     page >= totalPages
                   }
                   className={`px-4 py-2 rounded ${page >= totalPages
-                      ? "bg-gray-200 cursor-not-allowed"
-                      : "bg-gray-300 hover:bg-gray-400"
+                    ? "bg-gray-200 cursor-not-allowed"
+                    : "bg-gray-300 hover:bg-gray-400"
                     }`}
                 >
                   Next

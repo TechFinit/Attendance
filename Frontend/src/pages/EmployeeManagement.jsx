@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import API_URL from "../config/api";
 
 function EmployeeManagement() {
   const [employees, setEmployees] = useState([]);
@@ -43,7 +44,7 @@ function EmployeeManagement() {
 
     try {
       const res = await fetch(
-        "http://127.0.0.1:8000/api/employees"
+        `${API_URL}/api/employees`
       );
 
       const data = await res.json();
@@ -117,7 +118,7 @@ function EmployeeManagement() {
       }
 
       const res = await fetch(
-        "http://127.0.0.1:8000/api/employees",
+        `${API_URL}/api/employees`,
         {
           method: "POST",
           body: formData,
@@ -199,7 +200,7 @@ function EmployeeManagement() {
       }
 
       const res = await fetch(
-        `http://127.0.0.1:8000/api/employees/${id}`,
+        `${API_URL}/api/employees/${id}`,
         {
           method: "PUT",
           body: formData,
@@ -237,7 +238,7 @@ function EmployeeManagement() {
 
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/api/employees/delete/${id}`,
+        `${API_URL}/api/employees/delete/${id}`,
         {
           method: "PUT",
         }

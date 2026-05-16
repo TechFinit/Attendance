@@ -1,3 +1,4 @@
+
 const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
@@ -7,6 +8,7 @@ const multer = require("multer");
 const path = require("path");
 
 const app = express();
+require("dotenv").config();
 
 app.use(cors());
 app.use(express.json());
@@ -637,7 +639,7 @@ app.post("/api/employees", upload.single("profile_image"), async (req, res) => {
     let profileImage = "";
 
     if (req.file) {
-      profileImage = `http://127.0.0.1:8000/uploads/${req.file.filename}`;
+      profileImage = `${process.env.BASE_URL}/uploads/${req.file.filename}`;
     }
 
     const checkQuery = `
@@ -744,7 +746,7 @@ app.put(
       let profileImage = null;
 
       if (req.file) {
-        profileImage = `http://127.0.0.1:8000/uploads/${req.file.filename}`;
+        profileImage = `${process.env.BASE_URL}/uploads/${req.file.filename}`;
       }
 
       let query = `
@@ -1310,6 +1312,6 @@ app.get("/api/export", (req, res) => {
   });
 });
 
-app.listen(8000, () => {
+app.listen(process.env.PORT, () => {
   console.log("🚀 Server running on http://127.0.0.1:8000");
 });
