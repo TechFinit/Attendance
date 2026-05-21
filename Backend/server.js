@@ -1,4 +1,3 @@
-
 const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
@@ -6,6 +5,8 @@ const ExcelJS = require("exceljs");
 const bcrypt = require("bcrypt");
 const multer = require("multer");
 const path = require("path");
+
+const authMiddleware = require("./middleware/authMiddleware");
 
 const app = express();
 require("dotenv").config();
@@ -18,10 +19,10 @@ app.use("/uploads", express.static("uploads"));
 
 // ✅ DB CONNECTION
 const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "APTdbtl@2026",
-  database: "attendance_db",
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
 });
 
 db.connect((err) => {
@@ -590,7 +591,7 @@ app.post("/api/today", (req, res) => {
 // ============================
 // 👥 GET EMPLOYEES
 // ============================
-app.get("/api/employees", (req, res) => {
+app.get("/api/employees", authMiddleware, (req, res) => {
   const query = `
     SELECT
       id,
@@ -625,60 +626,71 @@ app.get("/api/employees", (req, res) => {
 // ============================
 // ➕ ADD EMPLOYEE
 // ============================
-app.post("/api/employees", upload.single("profile_image"), async (req, res) => {
-  try {
-    const { first_name, last_name, email, password, role, department, phone } =
-      req.body;
+app.post(
+  "/api/employees",
+  upload.single("profile_image"),
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const {
+        first_name,
+        last_name,
+        email,
+        password,
+        role,
+        department,
+        phone,
+      } = req.body;
 
-    if (!first_name || !last_name || !email || !password) {
-      return res.json({
-        error: "Missing required fields",
-      });
-    }
+      if (!first_name || !last_name || !email || !password) {
+        return res.json({
+          error: "Missing required fields",
+        });
+      }
 
-    let profileImage = "";
+      let profileImage = "";
 
-    if (req.file) {
-      profileImage = `${process.env.BASE_URL}/uploads/${req.file.filename}`;
-    }
+      if (req.file) {
+        profileImage = `${process.env.BASE_URL}/uploads/${req.file.filename}`;
+      }
 
-    const checkQuery = `
+      const checkQuery = `
         SELECT * FROM users
         WHERE LOWER(email)=LOWER(?)
       `;
 
-    db.query(checkQuery, [email], async (err, existing) => {
-      if (err) {
-        return res.json({
-          error: "DB error",
-        });
-      }
-
-      if (existing.length > 0) {
-        return res.json({
-          error: "Email already exists",
-        });
-      }
-
-      const countQuery = `
-            SELECT COUNT(*) as total
-            FROM users WHERE role = 'employee'
-          `;
-
-      db.query(countQuery, async (err2, countRes) => {
-        if (err2) {
+      db.query(checkQuery, [email], async (err, existing) => {
+        if (err) {
           return res.json({
             error: "DB error",
           });
         }
 
-        const count = countRes[0].total + 1;
+        if (existing.length > 0) {
+          return res.json({
+            error: "Email already exists",
+          });
+        }
 
-        const staff_id = `EMP${String(count).padStart(3, "0")}`;
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM users WHERE role = 'employee'
+          `;
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        db.query(countQuery, async (err2, countRes) => {
+          if (err2) {
+            return res.json({
+              error: "DB error",
+            });
+          }
 
-        const insertQuery = `
+          const count = countRes[0].total + 1;
+
+          const staff_id = `EMP${String(count).padStart(3, "0")}`;
+
+          const hashedPassword = await bcrypt.hash(password, 10);
+
+          const insertQuery = `
                 INSERT INTO users (
                   staff_id,
                   first_name,
@@ -693,49 +705,51 @@ app.post("/api/employees", upload.single("profile_image"), async (req, res) => {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
               `;
 
-        db.query(
-          insertQuery,
-          [
-            staff_id,
-            first_name,
-            last_name,
-            email.toLowerCase(),
-            hashedPassword,
-            role || "employee",
-            department || "",
-            phone || "",
-            profileImage,
-          ],
-          (err3) => {
-            if (err3) {
-              console.log(err3);
+          db.query(
+            insertQuery,
+            [
+              staff_id,
+              first_name,
+              last_name,
+              email.toLowerCase(),
+              hashedPassword,
+              role || "employee",
+              department || "",
+              phone || "",
+              profileImage,
+            ],
+            (err3) => {
+              if (err3) {
+                console.log(err3);
 
-              return res.json({
-                error: "Insert failed",
+                return res.json({
+                  error: "Insert failed",
+                });
+              }
+
+              res.json({
+                message: "Employee added successfully",
               });
-            }
-
-            res.json({
-              message: "Employee added successfully",
-            });
-          },
-        );
+            },
+          );
+        });
       });
-    });
-  } catch (err) {
-    console.log(err);
+    } catch (err) {
+      console.log(err);
 
-    res.json({
-      error: "Server error",
-    });
-  }
-});
+      res.json({
+        error: "Server error",
+      });
+    }
+  },
+);
 
 // ============================
 // ✏️ UPDATE EMPLOYEE
 // ============================
 app.put(
   "/api/employees/:id",
+  authMiddleware,
   upload.single("profile_image"),
   async (req, res) => {
     try {
@@ -800,7 +814,7 @@ app.put(
 // ============================
 // ❌ SOFT DELETE EMPLOYEE
 // ============================
-app.put("/api/employees/delete/:id", (req, res) => {
+app.put("/api/employees/delete/:id", authMiddleware, (req, res) => {
   const { id } = req.params;
 
   const query = `
@@ -827,7 +841,7 @@ app.put("/api/employees/delete/:id", (req, res) => {
 // ============================
 // 📊 ATTENDANCE
 // ============================
-app.get("/api/attendance", (req, res) => {
+app.get("/api/attendance", authMiddleware, (req, res) => {
   const { staffId, fromDate, toDate, shift, page = 1, limit = 10 } = req.query;
 
   let baseQuery = `
@@ -910,7 +924,7 @@ app.get("/api/attendance", (req, res) => {
 // ============================
 // 📥 EXPORT
 // ============================
-app.get("/api/export", (req, res) => {
+app.get("/api/export", authMiddleware, (req, res) => {
   const { staffId, fromDate, toDate, shift } = req.query;
 
   let query = `
@@ -988,7 +1002,7 @@ app.get("/api/export", (req, res) => {
 
       const employeeName = employeeRecords[0]?.first_name || "";
 
-      const sheetName = `${staffKey}`.substring(0, 31);
+      const sheetName = employeeName.substring(0, 31);
 
       const worksheet = workbook.addWorksheet(sheetName);
 
@@ -1016,34 +1030,29 @@ app.get("/api/export", (req, res) => {
       // ============================
       worksheet.columns = [
         {
-          header: "Staff ID",
-          key: "staff_id",
+          header: "Date",
+          key: "date",
           width: 15,
         },
         {
-          header: "Employee",
-          key: "employee",
-          width: 30,
-        },
-        {
-          header: "Date",
-          key: "date",
-          width: 18,
+          header: "Day",
+          key: "day",
+          width: 15,
         },
         {
           header: "Shift",
           key: "shift",
-          width: 18,
+          width: 15,
         },
         {
           header: "Login Time",
           key: "login",
-          width: 20,
+          width: 18,
         },
         {
           header: "Logout Time",
           key: "logout",
-          width: 20,
+          width: 18,
         },
         {
           header: "Total Hours",
@@ -1063,9 +1072,8 @@ app.get("/api/export", (req, res) => {
       const headerRow = worksheet.getRow(3);
 
       headerRow.values = [
-        "Staff ID",
-        "Employee",
         "Date",
+        "Day",
         "Shift",
         "Login Time",
         "Logout Time",
@@ -1130,25 +1138,38 @@ app.get("/api/export", (req, res) => {
           readableHours = `${hrs} hrs ${mins} mins`;
         }
 
-        const row = worksheet.addRow({
-          staff_id: r.staff_id || "-",
+        const isOff = r.logout_status === "Off";
 
-          employee: employeeName || r.user,
+        const loginDisplay = isOff
+          ? "OFF"
+          : new Date(r.login_time).toLocaleTimeString();
+
+        const logoutDisplay = isOff
+          ? "OFF"
+          : r.logout_time
+            ? new Date(r.logout_time).toLocaleTimeString()
+            : "-";
+
+        const statusDisplay = isOff ? "OFF" : r.logout_status || "Normal";
+
+        const row = worksheet.addRow({
 
           date: new Date(r.login_time).toLocaleDateString(),
 
+          day: new Date(r.login_time).toLocaleDateString("en-US", {
+            weekday: "long",
+          }),
+
           shift: r.shift,
 
-          login: new Date(r.login_time).toLocaleTimeString(),
+          login: loginDisplay,
 
-          logout: r.logout_time
-            ? new Date(r.logout_time).toLocaleTimeString()
-            : "-",
+          logout: logoutDisplay,
 
           // ✅ UPDATED HOURS FORMAT
-          hours: readableHours,
+          hours: isOff ? "Off" : readableHours,
 
-          status: r.logout_status || "Normal",
+          status: statusDisplay,
         });
 
         row.eachCell((cell) => {
@@ -1174,12 +1195,15 @@ app.get("/api/export", (req, res) => {
               type: "pattern",
               pattern: "solid",
               fgColor: {
-                argb: "FF0000",
+                argb: "FFCCCC",
               },
             };
 
             cell.font = {
               bold: true,
+              color: {
+                argb: "FF0000",
+              },
             };
           });
         }
@@ -1188,7 +1212,7 @@ app.get("/api/export", (req, res) => {
         // ✅ EMERGENCY → STATUS ONLY
         // ============================
         if (r.logout_status === "Emergency Logout") {
-          const statusCell = row.getCell(8);
+          const statusCell = row.getCell(7);
 
           statusCell.fill = {
             type: "pattern",
@@ -1203,6 +1227,82 @@ app.get("/api/export", (req, res) => {
           };
         }
       });
+
+      // ============================
+// ✅ EMPLOYEE SUMMARY
+// ============================
+
+const totalDays = employeeRecords.length;
+
+const offDays = employeeRecords.filter(
+  (r) => r.logout_status === "Off"
+).length;
+
+const emergencyDays = employeeRecords.filter(
+  (r) => r.logout_status === "Emergency Logout"
+).length;
+
+const presentDays =
+  totalDays - offDays;
+
+const totalWorkedHours =
+  employeeRecords.reduce((sum, r) => {
+    return sum + parseFloat(r.total_hours || 0);
+  }, 0);
+
+const avgHours =
+  totalDays > 0
+    ? (totalWorkedHours / totalDays).toFixed(1)
+    : 0;
+
+const summaryStartRow =
+  worksheet.rowCount + 3;
+
+// TITLE
+worksheet.mergeCells(
+  `A${summaryStartRow}:D${summaryStartRow}`
+);
+
+const summaryTitle =
+  worksheet.getCell(`A${summaryStartRow}`);
+
+summaryTitle.value =
+  "Employee Summary";
+
+summaryTitle.font = {
+  bold: true,
+  size: 14,
+};
+
+summaryTitle.alignment = {
+  horizontal: "center",
+};
+
+// DATA
+const summaryData = [
+  ["Total Days", totalDays],
+  ["Present", presentDays],
+  ["OFF", offDays],
+  ["Emergency Logout", emergencyDays],
+  ["Avg Hours", `${avgHours} hrs`],
+];
+
+summaryData.forEach((item) => {
+  const row = worksheet.addRow(item);
+
+  row.eachCell((cell) => {
+    cell.border = {
+      top: { style: "thin" },
+      left: { style: "thin" },
+      bottom: { style: "thin" },
+      right: { style: "thin" },
+    };
+
+    cell.alignment = {
+      horizontal: "center",
+    };
+  });
+});
 
       // ============================
       // ✅ OFF SUMMARY TABLE

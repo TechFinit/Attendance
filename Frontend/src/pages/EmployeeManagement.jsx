@@ -43,8 +43,16 @@ function EmployeeManagement() {
     setLoading(true);
 
     try {
+
+      const role = sessionStorage.getItem("role");
+
       const res = await fetch(
-        `${API_URL}/api/employees`
+        `${API_URL}/api/employees`,
+        {
+          headers: {
+            authorization: role,
+          },
+        }
       );
 
       const data = await res.json();
@@ -117,10 +125,15 @@ function EmployeeManagement() {
         );
       }
 
+      const role = sessionStorage.getItem("role");
+
       const res = await fetch(
         `${API_URL}/api/employees`,
         {
           method: "POST",
+          headers: {
+            authorization: role,
+          },
           body: formData,
         }
       );
@@ -203,6 +216,9 @@ function EmployeeManagement() {
         `${API_URL}/api/employees/${id}`,
         {
           method: "PUT",
+          headers: {
+            authorization: role,
+          },
           body: formData,
         }
       );
@@ -241,6 +257,9 @@ function EmployeeManagement() {
         `${API_URL}/api/employees/delete/${id}`,
         {
           method: "PUT",
+          headers: {
+            authorization: role,
+          },
         }
       );
 

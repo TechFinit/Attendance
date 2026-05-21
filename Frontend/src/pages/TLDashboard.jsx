@@ -42,7 +42,12 @@ function TLDashboard() {
 
     try {
       const res = await fetch(
-        `${API_URL}/api/attendance?page=${page}&limit=${limit}`
+        `${API_URL}/api/attendance?page=${page}&limit=${limit}`,
+        {
+          headers: {
+            Authorization: sessionStorage.getItem("role"),
+          },
+        }
       );
 
       const data = await res.json();
@@ -96,7 +101,13 @@ function TLDashboard() {
     }
 
     try {
-      const res = await fetch(url);
+      const res = await fetch(url,
+        {
+          headers: {
+            Authorization: sessionStorage.getItem("role"),
+          }
+        },
+      );
 
       const data = await res.json();
 
@@ -247,7 +258,13 @@ function TLDashboard() {
       url += `shift=${shift}&`;
     }
 
-    const res = await fetch(url);
+    const res = await fetch(url,
+      {
+        headers: {
+          Authorization: sessionStorage.getItem("role"),
+        },
+      }
+    );
 
     const blob = await res.blob();
 
@@ -312,70 +329,6 @@ function TLDashboard() {
     return "";
   };
 
-  const checkLate = (rec) => {
-
-    // ✅ If already marked as Late from backend
-    if (rec.logout_status === "Late") {
-      return true;
-    }
-
-    const login = new Date(rec.login_time);
-
-    const h = login.getHours();
-    const m = login.getMinutes();
-
-    // ✅ MORNING SHIFT
-    if (rec.shift === "Morning") {
-
-      // DST → 10 AM
-      // GMT → 11 AM
-      // Backend already handles exact logic
-
-      return h > 10 || (h === 10 && m > 0);
-    }
-
-    // ✅ NIGHT SHIFT
-    if (rec.shift === "Night") {
-
-      return h > 19 || (h === 19 && m > 0);
-    }
-
-    return false;
-  };
-
-  const checkShiftViolation = (rec) => {
-
-    // ✅ Ignore completed sessions
-    if (rec.logout_time) {
-      return false;
-    }
-
-    const shift =
-      rec.shift?.toLowerCase();
-
-    // ✅ USE UTC HOURS
-    const hour =
-      new Date(rec.login_time).getUTCHours();
-
-    // ✅ MORNING
-    if (
-      shift === "morning" &&
-      (hour < 6 || hour >= 18)
-    ) {
-      return true;
-    }
-
-    // ✅ NIGHT
-    if (
-      shift === "night" &&
-      hour >= 6 &&
-      hour < 18
-    ) {
-      return true;
-    }
-
-    return false;
-  };
 
   // ============================
   // 📊 STATS
@@ -700,13 +653,13 @@ function TLDashboard() {
                                   Emergency Logout
                                 </span>
 
-                              ) : checkShiftViolation(rec) ? (
+                              ) : rec.logout_status === "Invalid" ? (
 
                                 <span className="text-red-600 font-bold">
                                   Invalid
                                 </span>
 
-                              ) : checkLate(rec) ? (
+                              ) : rec.logout_status === "Late" ? (
 
                                 <span className="text-yellow-600 font-semibold">
                                   Late
