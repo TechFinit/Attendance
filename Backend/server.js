@@ -1,18 +1,35 @@
 const express = require("express");
+const helmet = require("helmet");
 const mysql = require("mysql2");
 const cors = require("cors");
 const ExcelJS = require("exceljs");
 const bcrypt = require("bcrypt");
 const multer = require("multer");
 const path = require("path");
+const rateLimit = require("express-rate-limit");
 
 const authMiddleware = require("./middleware/authMiddleware");
 
 const app = express();
 require("dotenv").config();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+  })
+);
+
+app.use(helmet());
 app.use(express.json());
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+
+  message: {
+    error: "Too many login attempts. Try again later.",
+  },
+});
 
 // ✅ STATIC UPLOADS
 app.use("/uploads", express.static("uploads"));
@@ -145,6 +162,23 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
+
+   limits: {
+    fileSize: 2 * 1024 * 1024,
+  },
+
+  fileFilter: (req, file, cb) => {
+
+    const allowed =
+      file.mimetype === "image/jpeg" ||
+      file.mimetype === "image/png";
+
+    if (allowed) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPG/PNG files allowed"));
+    }
+  },
 });
 
 // ============================
@@ -302,7 +336,7 @@ setInterval(() => {
 // ============================
 // 🔐 LOGIN
 // ============================
-app.post("/api/login", (req, res) => {
+app.post("/api/login", loginLimiter, (req, res) => {
   let { username, password, timezone } = req.body;
 
   console.log("🔥 LOGIN API HIT:", username);

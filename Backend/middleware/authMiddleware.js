@@ -1,19 +1,14 @@
-const authMiddleware = (req, res, next) => {
+module.exports = (req, res, next) => {
 
   const role = req.headers.authorization;
 
-  // ✅ CHECK ROLE
-  if (role === "admin" || role === "tl") {
+  if (role !== "admin" && role !== "tl") {
 
-    next();
-
-  } else {
-
-    return res.status(401).json({
-      error: "Unauthorized",
+    return res.status(403).json({
+      error: "Access Denied",
     });
 
   }
-};
 
-module.exports = authMiddleware;
+  next();
+};
