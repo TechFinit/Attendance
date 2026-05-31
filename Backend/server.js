@@ -16,7 +16,7 @@ require("dotenv").config();
 app.use(
   cors({
     origin: "http://localhost:5173",
-  })
+  }),
 );
 
 app.use(helmet());
@@ -163,15 +163,13 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
 
-   limits: {
+  limits: {
     fileSize: 2 * 1024 * 1024,
   },
 
   fileFilter: (req, file, cb) => {
-
     const allowed =
-      file.mimetype === "image/jpeg" ||
-      file.mimetype === "image/png";
+      file.mimetype === "image/jpeg" || file.mimetype === "image/png";
 
     if (allowed) {
       cb(null, true);
@@ -431,6 +429,11 @@ app.post("/api/login", loginLimiter, (req, res) => {
           return res.json({
             role: "employee",
             alreadyLoggedIn: true,
+
+            first_name: user.first_name,
+            last_name: user.last_name,
+            staff_id: user.staff_id,
+            profile_image: user.profile_image,
             data: result[0],
           });
         }
@@ -496,6 +499,10 @@ app.post("/api/login", loginLimiter, (req, res) => {
                   role: "employee",
                   alreadyLoggedIn: false,
                   user: username,
+                  first_name: user.first_name,
+                  last_name: user.last_name,
+                  staff_id: user.staff_id,
+                  profile_image: user.profile_image,
                   login_time: loginTime,
                   shift,
                   logoutStatus: logoutStatus,
@@ -1187,7 +1194,6 @@ app.get("/api/export", authMiddleware, (req, res) => {
         const statusDisplay = isOff ? "OFF" : r.logout_status || "Normal";
 
         const row = worksheet.addRow({
-
           date: new Date(r.login_time).toLocaleDateString(),
 
           day: new Date(r.login_time).toLocaleDateString("en-US", {
@@ -1263,80 +1269,71 @@ app.get("/api/export", authMiddleware, (req, res) => {
       });
 
       // ============================
-// ✅ EMPLOYEE SUMMARY
-// ============================
+      // ✅ EMPLOYEE SUMMARY
+      // ============================
 
-const totalDays = employeeRecords.length;
+      const totalDays = employeeRecords.length;
 
-const offDays = employeeRecords.filter(
-  (r) => r.logout_status === "Off"
-).length;
+      const offDays = employeeRecords.filter(
+        (r) => r.logout_status === "Off",
+      ).length;
 
-const emergencyDays = employeeRecords.filter(
-  (r) => r.logout_status === "Emergency Logout"
-).length;
+      const emergencyDays = employeeRecords.filter(
+        (r) => r.logout_status === "Emergency Logout",
+      ).length;
 
-const presentDays =
-  totalDays - offDays;
+      const presentDays = totalDays - offDays;
 
-const totalWorkedHours =
-  employeeRecords.reduce((sum, r) => {
-    return sum + parseFloat(r.total_hours || 0);
-  }, 0);
+      const totalWorkedHours = employeeRecords.reduce((sum, r) => {
+        return sum + parseFloat(r.total_hours || 0);
+      }, 0);
 
-const avgHours =
-  totalDays > 0
-    ? (totalWorkedHours / totalDays).toFixed(1)
-    : 0;
+      const avgHours =
+        totalDays > 0 ? (totalWorkedHours / totalDays).toFixed(1) : 0;
 
-const summaryStartRow =
-  worksheet.rowCount + 3;
+      const summaryStartRow = worksheet.rowCount + 3;
 
-// TITLE
-worksheet.mergeCells(
-  `A${summaryStartRow}:D${summaryStartRow}`
-);
+      // TITLE
+      worksheet.mergeCells(`A${summaryStartRow}:D${summaryStartRow}`);
 
-const summaryTitle =
-  worksheet.getCell(`A${summaryStartRow}`);
+      const summaryTitle = worksheet.getCell(`A${summaryStartRow}`);
 
-summaryTitle.value =
-  "Employee Summary";
+      summaryTitle.value = "Employee Summary";
 
-summaryTitle.font = {
-  bold: true,
-  size: 14,
-};
+      summaryTitle.font = {
+        bold: true,
+        size: 14,
+      };
 
-summaryTitle.alignment = {
-  horizontal: "center",
-};
+      summaryTitle.alignment = {
+        horizontal: "center",
+      };
 
-// DATA
-const summaryData = [
-  ["Total Days", totalDays],
-  ["Present", presentDays],
-  ["OFF", offDays],
-  ["Emergency Logout", emergencyDays],
-  ["Avg Hours", `${avgHours} hrs`],
-];
+      // DATA
+      const summaryData = [
+        ["Total Days", totalDays],
+        ["Present", presentDays],
+        ["OFF", offDays],
+        ["Emergency Logout", emergencyDays],
+        ["Avg Hours", `${avgHours} hrs`],
+      ];
 
-summaryData.forEach((item) => {
-  const row = worksheet.addRow(item);
+      summaryData.forEach((item) => {
+        const row = worksheet.addRow(item);
 
-  row.eachCell((cell) => {
-    cell.border = {
-      top: { style: "thin" },
-      left: { style: "thin" },
-      bottom: { style: "thin" },
-      right: { style: "thin" },
-    };
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" },
+          };
 
-    cell.alignment = {
-      horizontal: "center",
-    };
-  });
-});
+          cell.alignment = {
+            horizontal: "center",
+          };
+        });
+      });
 
       // ============================
       // ✅ OFF SUMMARY TABLE

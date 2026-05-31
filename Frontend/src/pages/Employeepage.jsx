@@ -8,7 +8,6 @@ function EmployeePage() {
   const [status, setStatus] = useState(null);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showModal, setShowModal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const navigate = useNavigate();
@@ -135,6 +134,25 @@ function EmployeePage() {
       );
 
       setTimeout(() => {
+        sessionStorage.setItem(
+          "employee_first_name",
+          data.first_name || ""
+        );
+
+        sessionStorage.setItem(
+          "employee_last_name",
+          data.last_name || ""
+        );
+
+        sessionStorage.setItem(
+          "employee_staff_id",
+          data.staff_id || ""
+        );
+
+        sessionStorage.setItem(
+          "employee_profile_image",
+          data.profile_image || ""
+        );
         navigate("/employee-dashboard");
       }, 400);
 
@@ -144,81 +162,6 @@ function EmployeePage() {
     }
 
     setLoading(false);
-  };
-
-  // ============================
-  // 🔥 LOGOUT CLICK
-  // ============================
-  const handleLogoutClick = () => {
-    if (!status) {
-      setMsg("No active session");
-      return;
-    }
-
-    const loginTime = new Date(status.login_time);
-    const now = new Date();
-    const hoursWorked = (now - loginTime) / (1000 * 60 * 60);
-
-    if (hoursWorked < 9) {
-      setShowModal(true);
-    } else {
-      handleLogout();
-    }
-  };
-
-  // ============================
-  // 🔐 LOGOUT (FIXED)
-  // ============================
-  const handleLogout = async () => {
-    try {
-      const user = sessionStorage.getItem("sessionUser");
-
-      if (!user) {
-        setMsg("No active session found");
-        return;
-      }
-
-      const res = await fetch(`${API_URL}/api/logout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: user,
-        }),
-      });
-
-      const data = await res.json();
-      console.log("LOGOUT RESPONSE:", data);
-
-      if (data.error) {
-        setMsg(data.error);
-        return;
-      }
-
-      setMsg("Logout Successful ✅");
-
-      // ✅ CLEAR SESSION
-      sessionStorage.removeItem("sessionUser");
-      sessionStorage.removeItem("username");
-
-      // ✅ RESET STATE
-      setStatus(null);
-      setUsername("");
-      setPassword("");
-      setShowModal(false);
-
-      // ✅ REFRESH STATUS (IMPORTANT FIX)
-      await fetchTodayStatus(user);
-
-      setTimeout(() => {
-        navigate("/");
-      }, 500);
-
-    } catch (err) {
-      console.log(err);
-      setMsg("Logout failed");
-    }
   };
 
   // ============================
@@ -251,24 +194,12 @@ function EmployeePage() {
       <div className="max-w-4xl mx-auto px-4">
 
         {/* HEADER */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-lg">
-              {username ? username.charAt(0).toUpperCase() : "E"}
-            </div>
-
-            <div>
-              <p className="text-sm text-gray-500">Welcome back</p>
-              <h2 className="text-lg font-semibold text-gray-800">
-                {username || "Employee"} 👋
-              </h2>
-            </div>
-          </div>
-
-          <div className="text-right">
+        <div className="mb-6">
+          <div>
             <p className="text-sm text-gray-500">
               {currentTime.toLocaleDateString()}
             </p>
+
             <h2 className="text-lg font-bold text-indigo-600">
               {currentTime.toLocaleTimeString()}
             </h2>
@@ -301,13 +232,6 @@ function EmployeePage() {
               className="w-full bg-indigo-600 text-white py-2 rounded-lg mb-3"
             >
               {loading ? "Logging in..." : "Login"}
-            </button>
-
-            <button
-              onClick={handleLogoutClick}
-              className="w-full bg-red-500 text-white py-2 rounded-lg"
-            >
-              Logout
             </button>
           </div>
 
@@ -352,35 +276,6 @@ function EmployeePage() {
           </div>
 
         </div>
-
-        {/* MODAL */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-            <div className="bg-white p-6 rounded-xl w-80">
-              <h2 className="text-lg font-bold mb-2">Early Logout</h2>
-              <p className="text-sm mb-4">
-                You haven’t completed 9 hours. Are you sure?
-              </p>
-
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-gray-200 rounded"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 bg-red-500 text-white rounded"
-                >
-                  Logout Anyway
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
       </div>
     </div>
   );
